@@ -1,6 +1,18 @@
+# Byte-compiled
 __pycache__/
 *.pyc
+
+# Datasets and models
+data/
+speech/data/
+speech/features/
+speech/models/
 *.wav
 *.zip
-data/
+
+# Jupyter artifacts
 notebooks/.ipynb_checkpoints/
+
+# Environment files
+.venv/
+*.env
