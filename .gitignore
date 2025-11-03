@@ -13,3 +13,5 @@ notebooks/.ipynb_checkpoints/
 # Environment files
 .venv/
 *.env
+speech/data/train/transcription/
+speech/data/test/transcription/
