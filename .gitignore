@@ -3,10 +3,7 @@ __pycache__/
 *.pyc
 
 # Datasets and models
-data/
-speech/data/
-speech/features/
-speech/models/
+speech_xgb_model.joblib
 *.wav
 *.zip
 
