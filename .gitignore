@@ -4,6 +4,9 @@ __pycache__/
 
 # Datasets and models
 speech_xgb_model.joblib
+speech_best_xgb_no_pca.joblib
+speech_best_xgboost.joblib
+speech_xgb_model_tuned.joblib
 *.wav
 *.zip
 
