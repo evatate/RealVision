@@ -8,7 +8,7 @@ from transformers import (
     DistilBertForSequenceClassification,
     get_linear_schedule_with_warmup
 )
-from torch.optim import AdamW  # CHANGED: use torch.optim.AdamW instead of transformers.AdamW
+from torch.optim import AdamW 
 from sklearn.model_selection import LeaveOneGroupOut
 from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
 from sklearn.preprocessing import StandardScaler
@@ -18,10 +18,6 @@ from tqdm import tqdm
 import warnings
 warnings.filterwarnings('ignore')
 
-print("=" * 80)
-print("DISTILBERT FINE-TUNING WITH LOSO CV + MULTIMODAL FUSION")
-print("=" * 80)
-
 # ========================
 # CONFIGURATION
 # ========================
@@ -29,8 +25,8 @@ FEATURES_FILE = "speech/features/speech_features_enhanced_semantic.csv"
 MAX_LENGTH = 256
 BATCH_SIZE = 4
 LEARNING_RATE = 2e-5
-NUM_EPOCHS = 2 # originally was 15, reduced for testing
-N_ENSEMBLE = 1  # reduced to 1 for testing, papers suggest increase to 25-50 for full performance
+NUM_EPOCHS = 15 #
+N_ENSEMBLE = 5  # reduced to 5 for testing, papers suggest increase to 25-50 for full performance
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.backends.cudnn.benchmark = True  # optional GPU speedup
 
@@ -40,7 +36,7 @@ print(f"Ensemble size: {N_ENSEMBLE} seeds")
 # ========================
 # 1. LOAD DATA
 # ========================
-print("\n[1/6] Loading features...")
+print("\nLoading features.")
 df = pd.read_csv(FEATURES_FILE)
 df = df.dropna(subset=["transcript"])  # remove empty transcripts
 df['transcript'] = df['transcript'].astype(str)
@@ -52,7 +48,7 @@ print(f"  AD: {(df['label'] == 1).sum()}")
 # ========================
 # 2. PREPARE AUXILIARY FEATURES
 # ========================
-print("\n[2/6] Preparing auxiliary features...")
+print("\nPreparing auxiliary features.")
 acoustic_cols = [c for c in df.columns if c.startswith('acoustic_')]
 text_stat_cols = [c for c in df.columns if c.startswith('text_')]
 meta_cols = ['age', 'gender', 'mmse']
@@ -119,7 +115,7 @@ class DistilBERTWithFusion(torch.nn.Module):
             'distilbert-base-uncased',
             num_labels=2
         )
-        self.norm = torch.nn.LayerNorm(768 + n_auxiliary_features)  # CHANGED: LayerNorm for stability
+        self.norm = torch.nn.LayerNorm(768 + n_auxiliary_features)  # LayerNorm for stability
         self.fusion = torch.nn.Sequential(
             torch.nn.Linear(768 + n_auxiliary_features, 256),
             torch.nn.ReLU(),
@@ -184,7 +180,7 @@ def evaluate_model(val_loader, model, device):
 # ========================
 # 6. LOSO CROSS-VALIDATION WITH ENSEMBLE
 # ========================
-print("\n[3/6] Setting up LOSO CV...")
+print("\nSetting up LOSO CV.")
 
 texts = df['transcript'].values
 labels = df['label'].values
@@ -192,25 +188,13 @@ tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
 
 # use only participant prefix for LOSO
 groups = df['subject_id'].apply(lambda x: x.split('-')[0]).values
-#logo = LeaveOneGroupOut()
-#n_splits = logo.get_n_splits(groups=groups)
-#print(f"  LOSO splits: {n_splits} participants")
-# CHANGED: limit to first 5 participants for quick testing
-unique_groups = np.unique(groups)
-test_groups = unique_groups[:5]
-df_quick = df[df['subject_id'].str.split('-').str[0].isin(test_groups)].reset_index(drop=True)
-texts = df_quick['transcript'].values
-labels = df_quick['label'].values
-X_features_quick = X_features[df_quick.index]
-groups_quick = df_quick['subject_id'].apply(lambda x: x.split('-')[0]).values
 logo = LeaveOneGroupOut()
-n_splits = logo.get_n_splits(groups=groups_quick)
+n_splits = logo.get_n_splits(groups=groups)
 print(f"  LOSO splits: {n_splits} participants")
-
 
 cv_results = []
 
-for fold_idx, (train_idx, val_idx) in enumerate(logo.split(texts, labels, groups=groups_quick)):
+for fold_idx, (train_idx, val_idx) in enumerate(logo.split(texts, labels, groups=groups)):
     val_subject = df.iloc[val_idx[0]]['subject_id'].split('-')[0]  # participant prefix
     print(f"\n--- Fold {fold_idx + 1}/{n_splits} ---")
     print(f"  Validation participant: {val_subject}")
@@ -278,7 +262,7 @@ for fold_idx, (train_idx, val_idx) in enumerate(logo.split(texts, labels, groups
 # ========================
 # 7. EVALUATION
 # ========================
-print("\n[5/6] LOSO Cross-Validation Results:")
+print("\nLOSO Cross-Validation Results:")
 df_cv = pd.DataFrame(cv_results)
 cv_acc = accuracy_score(df_cv['true_label'], df_cv['pred_label'])
 cv_f1 = f1_score(df_cv['true_label'], df_cv['pred_label'])
@@ -298,7 +282,7 @@ print(f"       AD       {cm[1,0]:3d}   {cm[1,1]:3d}")
 # ========================
 # 8. SAVE ARTIFACTS
 # ========================
-print("\n[6/6] Saving artifacts...")
+print("\nSaving artifacts...")
 artifacts = {
     'scaler': scaler,
     'imputer': imputer,
@@ -314,7 +298,7 @@ df_cv.to_csv("loso_cv_results.csv", index=False)
 # Save BERT embeddings (optional)
 torch.save(model.distilbert.distilbert.embeddings.word_embeddings.weight, "bert_embeddings.pt")
 
-print("  ✓ Artifacts saved")
+print("Artifacts saved")
 print("\n" + "=" * 80)
 print(f"COMPLETE - LOSO CV F1: {cv_f1:.3f}")
 print("=" * 80)
