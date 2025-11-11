@@ -3,18 +3,17 @@ __pycache__/
 *.pyc
 
 # Datasets and models
-speech_xgb_model.joblib
-speech_best_xgb_no_pca.joblib
-speech_best_xgboost.joblib
-speech_xgb_model_tuned.joblib
 *.wav
 *.zip
 
 # Jupyter artifacts
+speech/data/train
+speech/data/test
 notebooks/.ipynb_checkpoints/
 
 # Environment files
 .venv/
 *.env
+*.DS_Store
 speech/data/train/transcription/
 speech/data/test/transcription/
