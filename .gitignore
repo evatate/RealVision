@@ -7,8 +7,7 @@ __pycache__/
 *.zip
 
 # Jupyter artifacts
-speech/data/train
-speech/data/test
+speech/data/
 notebooks/.ipynb_checkpoints/
 
 # Environment files
@@ -17,9 +16,3 @@ notebooks/.ipynb_checkpoints/
 *.DS_Store
 speech/data/train/transcription/
 speech/data/test/transcription/
-train/
-test/
-speech/data/
-train/
-test/
-speech/data/
