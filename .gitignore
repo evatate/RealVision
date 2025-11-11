@@ -8,6 +8,7 @@ __pycache__/
 
 # Jupyter artifacts
 speech/data/
+speech/features/
 notebooks/.ipynb_checkpoints/
 
 # Environment files
