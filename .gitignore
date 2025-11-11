@@ -17,3 +17,9 @@ notebooks/.ipynb_checkpoints/
 *.DS_Store
 speech/data/train/transcription/
 speech/data/test/transcription/
+train/
+test/
+speech/data/
+train/
+test/
+speech/data/
