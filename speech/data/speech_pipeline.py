@@ -8,7 +8,7 @@ import opensmile
 from sklearn.cluster import KMeans
 
 # ========================
-# CONFIGURATION
+# PATHS
 # ========================
 TRAIN_AUDIO_PATH = "speech/data/train/Normalised_audio-chunks"
 TRAIN_TRANS_PATH = "speech/data/train/transcription"
@@ -18,22 +18,10 @@ META_FILES = {
 }
 CATEGORIES = ["cc", "cd"]
 
-# Check audio and transcript directories
-for label in CATEGORIES:
-    audio_folder = Path(TRAIN_AUDIO_PATH) / label
-    trans_folder = Path(TRAIN_TRANS_PATH) / label
-
-    if not audio_folder.exists():
-        raise FileNotFoundError(f"Audio folder missing: {audio_folder}")
-    if not trans_folder.exists():
-        raise FileNotFoundError(f"Transcript folder missing: {trans_folder}")
-
-print("✅ All audio and transcript directories exist.")
-
 # ========================
-# 1. LOAD METADATA (FIXED: Now reads MMSE)
+# LOAD METADATA
 # ========================
-print("[1/6] Loading metadata...")
+print("Loading metadata.")
 meta_data = {}
 for label in CATEGORIES:
     # Read with proper semicolon delimiter and handle whitespace
@@ -68,7 +56,7 @@ for label in CATEGORIES:
     print(f"  {label}: {len(df_meta)} subjects, columns: {list(df_meta.columns)}")
 
 # ========================
-# 2. TRANSCRIPT PROCESSING (FIXED: Pause encoding)
+# TRANSCRIPT PROCESSING
 # ========================
 def process_transcript_with_pauses(file_path):
     """
@@ -102,10 +90,20 @@ def process_transcript_with_pauses(file_path):
     text = re.sub(r'(\w+)\s*\[x\s*(\d+)\]', expand_repeat, text)
     
     # Remove other CHAT annotations but keep content
-    text = re.sub(r'\[.*?\]', '', text)  # Remove all bracket annotations
-    text = re.sub(r'[<>()]', '', text)   # Remove angle brackets and parens
+    #text = re.sub(r'\[.*?\]', '', text)  # Remove all bracket annotations
+    #text = re.sub(r'[<>()]', '', text)   # Remove angle brackets and parens
+
+    text = re.sub(r'\[[^\]]*\]', '', text)  # bracket removal
+    text = re.sub(r'[<>()]', '', text)     
+    text = re.sub(r'\+["/]+', '', text)     # remove +"" and +//
+
+    # Remove ELAN-style timestamps: start and end
+    text = re.sub(r'\x15\d+_\d+\x15', ' ', text)
+
+    # Remove other CLAN artifacts
+    text = re.sub(r'\+["/]+', '', text)
     
-    # Encode pauses (CRITICAL for BERT performance)
+    # Encode pauses 
     # Long pause (multiple newlines or explicit markers) -> ...
     text = re.sub(r'\n\n+', ' ... ', text)
     # Medium pause -> .
@@ -114,8 +112,9 @@ def process_transcript_with_pauses(file_path):
     text = re.sub(r'\s{3,}', ' , ', text)
     
     # Preserve filled pauses as tokens
-    text = re.sub(r'\buh\b', 'UH', text)
-    text = re.sub(r'\bum\b', 'UM', text)
+    text = re.sub(r'\buh\b', 'UH', text, flags=re.IGNORECASE)
+    text = re.sub(r'\bum\b', 'UM', text, flags=re.IGNORECASE)
+
     
     # Clean up whitespace
     text = re.sub(r'\s+', ' ', text).strip()
@@ -132,9 +131,9 @@ def process_transcript_with_pauses(file_path):
     return text, stats
 
 # ========================
-# 3. ACOUSTIC FEATURES (FIXED: eGeMAPS + ADR)
+# ACOUSTIC FEATURES (eGeMAPS + ADR)
 # ========================
-print("\n[2/6] Setting up acoustic feature extractors...")
+print("\nSetting up acoustic feature extractors.")
 
 # Initialize openSMILE for eGeMAPS
 smile = opensmile.Smile(
@@ -154,14 +153,14 @@ def extract_acoustic_features_enhanced(audio_path):
         y, sr = librosa.load(audio_path, sr=16000)
         duration = librosa.get_duration(y=y, sr=sr)
         
-        # === eGeMAPS features (gold standard) ===
+        # eGeMAPS features
         try:
             egemaps = smile.process_file(audio_path)
             egemaps_values = egemaps.values.flatten()
         except:
             egemaps_values = np.zeros(88)
         
-        # === Basic prosodic features ===
+        # Basic prosodic features
         # Energy
         rms = librosa.feature.rms(y=y)[0]
         energy_mean = np.mean(rms)
@@ -173,7 +172,7 @@ def extract_acoustic_features_enhanced(audio_path):
         pitch_mean = np.mean(f0_voiced) if len(f0_voiced) > 0 else 0
         pitch_std = np.std(f0_voiced) if len(f0_voiced) > 0 else 0
         
-        # === ADR summarization (k-means on MFCCs) ===
+        # ADR summarization (k-means on MFCCs)
         # Extract frame-level MFCCs
         mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=160, n_fft=400)
         mfccs_frames = mfccs.T  # (n_frames, 13)
@@ -187,7 +186,7 @@ def extract_acoustic_features_enhanced(audio_path):
         else:
             adr_histogram = np.zeros(30)
         
-        # === Pause statistics ===
+        # Pause statistics
         # Detect silent intervals (below threshold)
         intervals = librosa.effects.split(y, top_db=30)
         if len(intervals) > 1:
@@ -215,7 +214,7 @@ def extract_acoustic_features_enhanced(audio_path):
         total_speech_time = duration - total_pause_time
         speech_rate = total_speech_time / duration if duration > 0 else 0
         
-        # === Combine all features ===
+        # Combine all features
         features = np.concatenate([
             egemaps_values,  # 88 features
             [energy_mean, energy_std, pitch_mean, pitch_std],  # 4 features
@@ -233,9 +232,9 @@ def extract_acoustic_features_enhanced(audio_path):
         return np.zeros(88 + 4 + 30 + 4 + 3 + 2)  # 131 features total
 
 # ========================
-# 4. COLLECT DATA WITH SUBJECT-LEVEL ORGANIZATION
+# COLLECT DATA WITH SUBJECT-LEVEL ORGANIZATION
 # ========================
-print("\n[3/6] Collecting training data (subject-level)...")
+print("\n[Collecting training data (subject-level).")
 subjects_data = []
 
 for label in CATEGORIES:
@@ -249,17 +248,20 @@ for label in CATEGORIES:
         # Extract participant ID (subject ID)
         participant_id = audio_file.replace('.wav', '').strip()
         
+        # Use only first 4 characters for metadata lookup
+        base_id = participant_id[:4]
+
         # Get metadata
-        if participant_id in meta_data[label].index:
-            age = meta_data[label].loc[participant_id, 'age']
-            gender = meta_data[label].loc[participant_id, 'gender']
-            mmse = meta_data[label].loc[participant_id, 'mmse'] if 'mmse' in meta_data[label].columns else np.nan
+        if base_id in meta_data[label].index:
+            age = meta_data[label].loc[base_id, 'age']
+            gender = meta_data[label].loc[base_id, 'gender']
+            mmse = meta_data[label].loc[base_id, 'mmse'] if 'mmse' in meta_data[label].columns else np.nan
         else:
             age, gender, mmse = np.nan, np.nan, np.nan
         
         # Paths
         audio_path = os.path.join(audio_folder, audio_file)
-        trans_path = os.path.join(trans_folder, participant_id + '.cha')
+        trans_path = os.path.join(trans_folder, base_id + '.cha')
         
         subjects_data.append({
             'subject_id': participant_id,
@@ -277,9 +279,9 @@ print(f"  Control (cc): {(df_subjects['label'] == 0).sum()}")
 print(f"  Dementia (cd): {(df_subjects['label'] == 1).sum()}")
 
 # ========================
-# 5. EXTRACT FEATURES
+# EXTRACT FEATURES
 # ========================
-print("\n[4/6] Extracting features for all subjects...")
+print("\nExtracting features for all subjects.")
 all_features = []
 
 for idx, row in df_subjects.iterrows():
@@ -315,12 +317,12 @@ df_features = pd.DataFrame(all_features)
 print(f"\n  Feature extraction complete: {df_features.shape}")
 
 # ========================
-# 6. SAVE
+# SAVE
 # ========================
-print("\n[5/6] Saving features...")
+print("\nSaving features.")
 output_dir = Path("speech/features")
 output_dir.mkdir(parents=True, exist_ok=True)
 
 # Save full dataframe
 df_features.to_csv(output_dir / "speech_features_enhanced_semantic.csv", index=False)
-print(f"  ✓ Saved to {output_dir / 'speech_features_enhanced_semantic.csv'}")
+print(f"Saved to {output_dir / 'speech_features_enhanced_semantic.csv'}")
