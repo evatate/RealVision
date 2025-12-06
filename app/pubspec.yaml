@@ -1,0 +1,52 @@
+name: realvision
+description: ADRD assessment application with multimodal biomarker detection
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI & Design
+  cupertino_icons: ^1.0.6
+  flutter_svg: ^2.0.9
+  
+  # Camera & Media
+  camera: ^0.10.5+5
+  image: ^4.1.3
+  
+  # Audio
+  speech_to_text: ^6.6.0
+  flutter_tts: ^3.8.5
+  permission_handler: ^11.0.1
+  
+  # Health Data
+  health: ^10.0.0
+  
+  # ML Models
+  tflite_flutter: ^0.10.4
+  
+  # State Management
+  provider: ^6.1.1
+  
+  # Storage
+  shared_preferences: ^2.2.2
+  path_provider: ^2.1.1
+  
+  # Utilities
+  intl: ^0.18.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/models/
