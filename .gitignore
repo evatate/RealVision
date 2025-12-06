@@ -17,3 +17,16 @@ notebooks/.ipynb_checkpoints/
 *.DS_Store
 speech/data/train/transcription/
 speech/data/test/transcription/
+
+# app related
+app/build/
+app/.dart_tool/
+app/.metadata
+app/ios/Pods/
+app/ios/.symlinks/
+app/ios/Flutter/App.framework
+app/ios/Flutter/Flutter.framework
+app/ios/Flutter/ephemeral/
+app/android/.gradle/
+app/android/app/release/
+app/**/*.log
