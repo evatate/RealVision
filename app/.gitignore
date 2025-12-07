@@ -11,6 +11,8 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+pubspec.lock
+/android/build/reports
 
 # IntelliJ related
 *.iml
@@ -18,10 +20,11 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# The .vscode folder contains launch configuration and tasks configured in
+# VS Code which we may wish to be included in version control, so this line
+# could comment it out if we wantis commented out by default.
+.vscode/
+devtools_options.yaml
 
 # Flutter/Dart/Pub related
 **/doc/api/
