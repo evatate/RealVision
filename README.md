@@ -1,119 +1,99 @@
-# RealVision
+# RealVision: Multimodal Machine Learning for ADRD Screening
 
-A multimodal ML project to detect Alzheimer's Disease and Related Dementias (ADRD) 
-from four behavioral indicators: gait, speech, eye movement, and facial expressions.
+RealVision is a research-driven platform for early detection and monitoring of Alzheimer’s Disease and Related Dementias (ADRD). The system combines four independent behavioral and neurological indicators known to correlate with cognitive decline:
 
-## Current Progress: ADReSS Speech Feature Extraction Pipeline
+1. Speech and prosodic impairments
+2. Abnormal eye movement characteristics
+3. Reduced facial expressiveness
+4. Gait instability and changes in walking biomechanics
 
-This pipeline (`speech_pipline.py`) processes the **ADReSS (Alzheimer’s Dementia Recognition through Spontaneous Speech)** dataset to extract synchronized acoustic and linguistic features, merge them with the training participant metadata, and output a single machine-learning–ready CSV file.
-
----
-
-### Project Structure
-
-Expected directory layout so far:
-
-```
-speech/
-│
-├── data/
-│   ├── train/
-│   │   ├── Normalised_audio-chunks/
-│   │   │   ├── cc/
-│   │   │   │   ├── S001.wav
-│   │   │   │   └── ...
-│   │   │   └── cd/
-│   │   │       ├── S101.wav
-│   │   │       └── ...
-│   │   ├── transcription/
-│   │   │   ├── cc/
-│   │   │   │   ├── S001.cha
-│   │   │   └── cd/
-│   │   │       ├── S101.cha
-│   │   │       └── ...
-│   │   ├── cc_meta_data.txt
-│   │   └── cd_meta_data.txt
-│
-└── features/
-    └── speech_features_enhanced_semantic.csv
-```
-
-Each transcript (`.cha`) shares its 4-digit ID (e.g., `S001`) with the corresponding metadata row.
+The project consists of a complete pipeline including data acquisition, multimodal feature extraction, supervised machine learning architectures, and deployment to a patient-facing mobile application.
 
 ---
 
-### Dependencies
+## Clinical Motivation
 
-Install the required libraries:
+Clinical diagnosis of ADRD typically occurs years after symptom onset due to:
+- Limited access to neurological testing
+- Subtle early-phase behavioral changes
+- Lack of scalable continuous monitoring options
 
-```bash
-pip install pandas numpy librosa opensmile scikit-learn
-```
+Prior work has shown that individual modalities can identify ADRD characteristics with strong statistical significance:
+- Speech analysis approaches ~83% classification accuracy on standardized datasets
+- Eye movement metrics achieve up to ~95% discrimination in early-onset studies
+- Gait changes are detectable years before cognitive symptoms are reported
+- Facial muscle activation (e.g., smiling) differs significantly between ADRD/MCI and healthy controls
 
-Make sure you have `openSMILE` configured for the **eGeMAPS v2** feature set.
-This script uses the official `opensmile` Python bindings.
-
----
-
-### What the Script Does
-
-1. Load metadata
-
-2. Process transcripts (`.cha` files)
-    - encodes pauses as tokens
-    - expands repetition of words
-    - marks statements of "uh" and "um"
-    - extracts word count and pause counts
-
-3. Extracts acoustic features (`.wav` files)
-    - eGeMAPS features via openSMILE
-    - energy and pitch
-    - MFCC k-means summarization
-    - pause statistics
-    - speech rates
-
-4. Produces csv file
-    - merges transcript text + stats + acoustics + metadata into one dataframe.
-    - produces one row per subject with columns:
-
-     ```
-     subject_id, label, age, gender, mmse,
-     transcript, acoustic_0 … acoustic_130,
-     text_word_count, text_pause_short_count, …
-     ```
-   * Saves to:
-
-     ```
-     speech/features/speech_features_enhanced_semantic.csv
-     ```
-
-
-### Notes on Design so far (can be improved upon later if necessary)
-
-* **Repetitions preserved:** Linguistically relevant to Alzheimer’s symptoms.
-* **Filled pauses kept** (`UH`, `UM`): Paper found people with Alzheimer's are more likely to say `uh` than `um`
-* **Pauses encoded explicitly**: Longer pauses with Alzheimer's, can analyze with DistilBERT
-* **Gender made numeric**: Easier inclusion in ML models, 1 if female and 0 if male
-* **eGeMAPS + ADR fusion**: Matches ADReSS acoustic setups
+RealVision unifies these signals into a single multimodal screening framework intended for use in non-clinical environments.
 
 ---
 
-### How to Run
+## System Overview
 
-Simply execute from the root directory:
+The RealVision pipeline includes the following components:
 
-```bash
-python speech_pipeline.py
-```
+| Component | Input | Feature Extraction | Output |
+|----------|------|------------------|--------|
+| Speech Processing | Audio + transcript | Linguistic, acoustic, semantic embeddings | AD vs control predictions, MMSE regression |
+| Eye Tracking | Camera video | Fixation stability, saccade metrics, pursuit error | Oculomotor impairment score |
+| Facial Analysis | Camera video | Face landmark motion, smile index | Facial expressiveness score |
+| Gait Analysis | Mobile sensors | Step asymmetry, stride variability, speed | Gait instability score |
 
-The script saves the combined feature table.
+The final product is an ensemble model integrating scores from all modalities to estimate ADRD likelihood.
 
 ---
 
-### Next Steps
+## Current Progress
 
-1. Train DistilBERT semantic embeddings on transcript column and add to our acoustic/linguistic features (ideally ensembling for better results)
-2. Combine features and then experiment with classifiers like logistic regression and SVM
-3. MMSE regression and evaluate RMSE
-4. Cross validation + ensembling
-5. Test on test data provided
+### Speech Pipeline
+Completed:
+- Data ingestion from ADReSS-2020 dataset
+- openSMILE eGeMAPS v2 acoustic feature extraction
+- Linguistic feature engineering from CHAT transcripts
+- Participant metadata integration into unified ML table
+
+In Progress:
+- DistilBERT-based semantic feature extraction and fusion
+- MMSE regression and classifier improvement
+- Cross-validation and generalizability testing
+
+### Mobile Application
+Completed:
+- Fully functional Android prototype with:
+  - Speech recording workflow
+  - Three eye-tracking tasks
+  - Smile test recording pipeline
+  - Gait/step capture using Health Connect
+
+In Progress:
+- iOS feature testing (HealthKit and camera calibration)
+- Integration of TensorFlow Lite models for on-device inference
+- Final scoring and results presentation UI
+
+### Remaining Modalities (Models)
+In Development:
+- Eye-tracking signal processing
+- Facial expression dynamics modeling
+- Gait biomechanics feature processing
+
+---
+
+## Tech Stack
+
+| Layer | Tools and Frameworks |
+|------|---------------------|
+| ML Model Development | Python, PyTorch, Transformers, scikit-learn |
+| Speech Feature Extraction | openSMILE, librosa, NLP preprocessing |
+| Mobile Sensor Data Capture | HealthKit (iOS), Health Connect (Android) |
+| Computer Vision | TensorFlow Lite, MediaPipe (planned) |
+| App Development | Flutter SDK (cross-platform), Dart |
+
+---
+
+## Research Deliverables
+
+1. Full multimodal dataset aligned to clinical cognition metadata
+2. ML models for each modality + final ensemble classifier
+3. On-device inference pipeline optimized for mobile hardware
+4. Performance benchmarks against known ADRD datasets
+5. Publication of methodology and findings
