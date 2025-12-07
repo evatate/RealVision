@@ -38,39 +38,55 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
   }
 
   Future<void> _startTest() async {
-    final hasPermission = await _healthService.requestPermissions();
-    
-    if (!hasPermission) {
-      if (mounted) {
+    try {
+      final hasPermission = await _healthService.requestPermissions();
+      
+      if (!hasPermission && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Health permissions are required for this test'),
+          SnackBar(
+            content: Text(
+              'Please install Google Fit or Samsung Health and grant permissions',
+              style: TextStyle(fontSize: 18),
+            ),
+            duration: Duration(seconds: 4),
           ),
         );
+        return;
       }
-      return;
-    }
 
-    setState(() {
-      _isRecording = true;
-      _countdown = AppConstants.gaitTestDuration;
-      _startTime = DateTime.now();
-    });
-
-    await _audioService.speak(
-      'Please walk normally for the next 2 minutes. The app will track your steps.',
-    );
-
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       setState(() {
-        _countdown--;
-        
-        if (_countdown <= 0) {
-          timer.cancel();
-          _completeTest();
-        }
+        _isRecording = true;
+        _countdown = AppConstants.gaitTestDuration;
+        _startTime = DateTime.now();
       });
-    });
+
+      await _audioService.speak(
+        'Please walk normally for the next 2 minutes',
+      );
+
+      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        
+        setState(() {
+          _countdown--;
+          
+          if (_countdown <= 0) {
+            timer.cancel();
+            _completeTest();
+          }
+        });
+      });
+    } catch (e) {
+      print('Error starting gait test: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _completeTest() async {
@@ -78,21 +94,23 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
 
     final endTime = DateTime.now();
     
-    // Get gait data from health service
-    final gaitData = await _healthService.getGaitData(
-      start: _startTime!,
-      end: endTime,
-    );
-    
-    print('Gait data collected: $gaitData'); // For debugging
+    try {
+      final gaitData = await _healthService.getGaitData(
+        start: _startTime!,
+        end: endTime,
+      );
+      
+      print('Gait data collected: $gaitData');
+    } catch (e) {
+      print('Error getting gait data: $e');
+    }
 
+    if (!mounted) return;
+    
     setState(() => _isRecording = false);
     
     Provider.of<TestProgress>(context, listen: false).markGaitCompleted();
     await _audioService.speak('Walking test complete');
-    
-    // TODO: Send gait data to backend or save for model inference
-    // For now, the data is just printed to console
     
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) Navigator.pop(context);
@@ -108,13 +126,11 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
           children: [
             const Breadcrumb(current: 'Walking Test'),
             Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
-                  child: _isRecording
-                      ? _buildRecordingScreen()
-                      : _buildStartScreen(),
-                ),
+              child: SingleChildScrollView( // MAKES IT SCROLLABLE - FIXES OVERFLOW
+                padding: EdgeInsets.all(AppConstants.buttonSpacing),
+                child: _isRecording
+                    ? _buildRecordingScreen()
+                    : _buildStartScreen(),
               ),
             ),
           ],
@@ -129,11 +145,15 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
       children: [
         Text(
           'Walking Test',
-          style: Theme.of(context).textTheme.displayMedium,
+          style: TextStyle(
+            fontSize: AppConstants.headingFontSize,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textDark,
+          ),
         ),
-        const SizedBox(height: 48),
+        SizedBox(height: AppConstants.buttonSpacing * 2),
         Container(
-          padding: const EdgeInsets.all(32),
+          padding: EdgeInsets.all(AppConstants.buttonPadding),
           decoration: BoxDecoration(
             color: AppColors.cardBackground,
             borderRadius: BorderRadius.circular(16),
@@ -141,52 +161,66 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
           ),
           child: Column(
             children: [
-              const Icon(
+              Icon(
                 Icons.directions_walk,
                 size: 80,
                 color: AppColors.primary,
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               Text(
                 'This test uses your phone\'s step counter to analyze your walking pattern',
-                style: Theme.of(context).textTheme.bodyLarge,
+                style: TextStyle(
+                  fontSize: AppConstants.bodyFontSize,
+                  color: AppColors.textDark,
+                ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               Text(
                 'Please walk normally for 2 minutes',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textMedium,
-                    ),
+                style: TextStyle(
+                  fontSize: 20,
+                  color: AppColors.textMedium,
+                ),
                 textAlign: TextAlign.center,
               ),
             ],
           ),
         ),
-        const SizedBox(height: 48),
-        ElevatedButton(
-          onPressed: _startTest,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
+        SizedBox(height: AppConstants.buttonSpacing * 2),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _startTest,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: EdgeInsets.all(AppConstants.buttonPadding),
+            ),
+            child: Text(
+              'Start Walking Test',
+              style: TextStyle(fontSize: AppConstants.buttonFontSize),
+            ),
           ),
-          child: const Text('Start Walking Test'),
         ),
-        const SizedBox(height: 32),
+        SizedBox(height: AppConstants.buttonSpacing),
         Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.yellow[100],
+            color: Colors.orange[50],
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.yellow[700]!, width: 2),
+            border: Border.all(color: Colors.orange[300]!, width: 2),
           ),
           child: Row(
             children: [
-              const Icon(Icons.info_outline, color: Colors.orange),
-              const SizedBox(width: 16),
+              Icon(Icons.info_outline, color: Colors.orange[700], size: 28),
+              SizedBox(width: 16),
               Expanded(
                 child: Text(
-                  'Note: For Android, install Google Fit or Samsung Health',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  'Install Google Fit or Samsung Health for step tracking',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: AppColors.textDark,
+                  ),
                 ),
               ),
             ],
@@ -200,30 +234,36 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Icon(
+        Icon(
           Icons.directions_walk,
           size: 120,
           color: AppColors.primary,
         ),
-        const SizedBox(height: 32),
+        SizedBox(height: AppConstants.buttonSpacing),
         Text(
           'Recording Walk',
-          style: Theme.of(context).textTheme.displayMedium,
+          style: TextStyle(
+            fontSize: AppConstants.headingFontSize,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textDark,
+          ),
         ),
-        const SizedBox(height: 48),
+        SizedBox(height: AppConstants.buttonSpacing * 2),
         Text(
           '${_countdown}s',
-          style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                color: AppColors.primary,
-                fontSize: 72,
-              ),
+          style: TextStyle(
+            fontSize: 72,
+            fontWeight: FontWeight.bold,
+            color: AppColors.primary,
+          ),
         ),
-        const SizedBox(height: 24),
+        SizedBox(height: AppConstants.buttonSpacing),
         Text(
           'Keep walking normally',
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: AppColors.textMedium,
-              ),
+          style: TextStyle(
+            fontSize: AppConstants.bodyFontSize,
+            color: AppColors.textMedium,
+          ),
         ),
       ],
     );

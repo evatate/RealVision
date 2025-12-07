@@ -42,19 +42,39 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   }
 
   Future<void> _startTest() async {
-    await _cameraService.initialize();
-    setState(() {
-      _cameraInitialized = true;
-      _currentPhase = SmilePhase.neutral;
-      _countdown = AppConstants.smilePhaseDuration;
-    });
-    
-    await _audioService.speak('Please keep a neutral face for 15 seconds');
-    _startCountdown();
+    try {
+      await _cameraService.initialize();
+      
+      if (!mounted) return;
+      
+      // Small delay to let camera stabilize
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      setState(() {
+        _cameraInitialized = true;
+        _currentPhase = SmilePhase.neutral;
+        _countdown = AppConstants.smilePhaseDuration;
+      });
+      
+      await _audioService.speak('Please keep a neutral face for 15 seconds');
+      _startCountdown();
+    } catch (e) {
+      print('Camera error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Camera error: $e')),
+        );
+      }
+    }
   }
 
   void _startCountdown() {
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      
       setState(() {
         _countdown--;
         
@@ -117,78 +137,107 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   }
 
   Widget _buildStartScreen() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Smile Test',
-              style: Theme.of(context).textTheme.displayMedium,
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(AppConstants.buttonSpacing),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'Smile Test',
+            style: TextStyle(
+              fontSize: AppConstants.headingFontSize,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textDark,
             ),
-            const SizedBox(height: 32),
-            Text(
-              'You will be asked to keep a neutral face, then smile, then return to neutral',
-              style: Theme.of(context).textTheme.bodyLarge,
-              textAlign: TextAlign.center,
+          ),
+          SizedBox(height: AppConstants.buttonSpacing * 2),
+          Text(
+            'You will be asked to keep a neutral face, then smile, then return to neutral',
+            style: TextStyle(
+              fontSize: AppConstants.bodyFontSize,
+              color: AppColors.textDark,
             ),
-            const SizedBox(height: 48),
-            ElevatedButton(
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: AppConstants.buttonSpacing * 2),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
               onPressed: _startTest,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
+                padding: EdgeInsets.all(AppConstants.buttonPadding),
               ),
-              child: const Text('Start Test'),
+              child: Text(
+                'Start Test',
+                style: TextStyle(fontSize: AppConstants.buttonFontSize),
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildTestScreen() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_cameraInitialized && _cameraService.controller != null)
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.border, width: 4),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: AspectRatio(
-                    aspectRatio: 4 / 3,
-                    child: CameraPreview(_cameraService.controller!),
-                  ),
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(AppConstants.buttonSpacing),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (_cameraInitialized && _cameraService.controller != null)
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border, width: 4),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AspectRatio(
+                  aspectRatio: _cameraService.controller!.value.aspectRatio,
+                  child: CameraPreview(_cameraService.controller!),
                 ),
               ),
-            const SizedBox(height: 48),
-            Text(
-              _getPhaseEmoji(),
-              style: const TextStyle(fontSize: 80),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              _getPhaseText(),
-              style: Theme.of(context).textTheme.displayMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            if (_currentPhase != SmilePhase.complete)
-              Text(
-                '${_countdown}s',
-                style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                      color: AppColors.primary,
-                    ),
+            )
+          else
+            Container(
+              height: 300,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(16),
               ),
-          ],
-        ),
+              child: Center(
+                child: CircularProgressIndicator(
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+          SizedBox(height: AppConstants.buttonSpacing * 2),
+          Text(
+            _getPhaseEmoji(),
+            style: const TextStyle(fontSize: 80),
+          ),
+          SizedBox(height: 24),
+          Text(
+            _getPhaseText(),
+            style: TextStyle(
+              fontSize: AppConstants.headingFontSize,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textDark,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: 24),
+          if (_currentPhase != SmilePhase.complete)
+            Text(
+              '${_countdown}s',
+              style: TextStyle(
+                fontSize: 72,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
+            ),
+        ],
       ),
     );
   }

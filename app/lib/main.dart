@@ -18,15 +18,16 @@ class RealVisionApp extends StatelessWidget {
       create: (_) => TestProgress(),
       child: MaterialApp(
         title: 'RealVision',
+        debugShowCheckedModeBanner: false, // REMOVES DEBUG BANNER
         theme: ThemeData(
           primarySwatch: Colors.blue,
           scaffoldBackgroundColor: AppColors.background,
           fontFamily: 'Roboto',
           textTheme: const TextTheme(
-            displayLarge: TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
-            displayMedium: TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
-            bodyLarge: TextStyle(fontSize: 24),
-            bodyMedium: TextStyle(fontSize: 20),
+            displayLarge: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: AppColors.textDark),
+            displayMedium: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: AppColors.textDark),
+            bodyLarge: TextStyle(fontSize: 24, color: AppColors.textDark),
+            bodyMedium: TextStyle(fontSize: 20, color: AppColors.textDark),
           ),
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(

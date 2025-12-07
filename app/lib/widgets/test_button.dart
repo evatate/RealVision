@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/colors.dart';
+import '../utils/constants.dart';
 
 class TestButton extends StatelessWidget {
   final IconData icon;
@@ -35,31 +36,31 @@ class TestButton extends StatelessWidget {
           onTap: onPressed,
           borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: EdgeInsets.all(AppConstants.buttonPadding),
             child: Row(
               children: [
                 Icon(
                   icon,
-                  size: 48,
+                  size: 56,
                   color: AppColors.primary,
                 ),
-                const SizedBox(width: 24),
+                SizedBox(width: 24),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
-                          fontSize: 28,
+                        style: TextStyle(
+                          fontSize: AppConstants.bodyFontSize + 4,
                           fontWeight: FontWeight.bold,
                           color: AppColors.textDark,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4),
                       Text(
                         description,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 20,
                           color: AppColors.textMedium,
                         ),
@@ -68,9 +69,9 @@ class TestButton extends StatelessWidget {
                   ),
                 ),
                 if (completed)
-                  const Icon(
+                  Icon(
                     Icons.check_circle,
-                    size: 40,
+                    size: 48,
                     color: AppColors.success,
                   ),
               ],
