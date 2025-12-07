@@ -2,12 +2,58 @@
 
 A Flutter application for multimodal Alzheimer's Disease and Related Dementias (ADRD) assessment using machine learning.
 
+---
+
 ## Features
 
-- **Speech Assessment**: Cookie Theft picture description with acoustic and linguistic analysis
-- **Eye Tracking**: Fixation stability, pro-saccade, and smooth pursuit tests
-- **Facial Expression**: Smile index analysis
-- **Gait Analysis**: Walking pattern assessment via HealthKit/Health Connect
+The app walks users through a checklist-style assessment consisting of:
+
+### Speech Test
+- Shows the Cookie Theft image
+- Records spoken responses directly from the device microphone
+- Audio is stored locally for ML-based linguistic + acoustic analysis
+
+### Eye Tracking Tests
+Uses the front-facing camera:
+- **Fixation Stability** – stare at a crosshair without blinking
+- **Pro-saccade Test** – quickly look toward appearing targets
+- **Smooth Pursuit** – track a moving dot across the screen  
+These tasks reflect oculomotor impairments associated with ADRD.
+
+### Smile Test
+- Prompts: “Smile” → “Return to neutral”
+- Records facial muscle movement
+- Future ML score: **Smile Index** (reduced muscle activation = concern)
+
+### Walking Test — Gait Analysis
+- Prompts the user to walk normally for 2 minutes
+- Collects step and movement data via:
+  - **Android Health Connect**
+  - **Apple HealthKit**
+- Detects gait irregularities linked to cognitive decline
+
+As tasks are completed, checkmarks appear. When finished, the “View Results” screen will show:
+- Estimated Alzheimer’s likelihood (after model integration)
+- Recommended follow-up and screening guidance
+
+## Dementia-Friendly Design Principles
+- Large fonts (24-48px)
+- High contrast colors
+- Audio instructions at 0.8x speed
+- Linear navigation with breadcrumbs
+- Generous button spacing
+- Sans-serif fonts
+
+---
+
+## Status of Testing Across Platforms
+
+| Platform | Status | Notes |
+|---------|--------|------|
+| **Android** | Active testing & UX polishing | Fully runnable; model API integration ongoing |
+| **iOS** | In testing | Camera + HealthKit calibration pending |
+
+---
 
 ## Setup Instructions
 
@@ -111,11 +157,3 @@ flutter build apk --release
 # iOS
 flutter build ios --release
 ```
-
-## Dementia-Friendly Design Principles Given by Vedant
-- Large fonts (24-48px)
-- High contrast colors
-- Audio instructions at 0.8x speed
-- Linear navigation with breadcrumbs
-- Generous button spacing
-- Sans-serif fonts
