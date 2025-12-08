@@ -31,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await _audioService.initialize();
       setState(() => _initialized = true);
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(Duration(milliseconds: AppConstants.audioInstructionDelay));
       await _audioService.speak('Welcome to Real Vision. Please choose a test.');
     } catch (e) {
       print('Audio initialization error: $e');
@@ -50,41 +50,27 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Column(
-          children: [
-            // Header (not scrollable)
-            Padding(
-              padding: EdgeInsets.all(AppConstants.buttonSpacing),
-              child: Column(
-                children: [
-                  Text(
-                    'RealVision',
-                    style: TextStyle(
-                      fontSize: AppConstants.titleFontSize,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Memory and Thinking Assessment',
-                    style: TextStyle(
-                      fontSize: AppConstants.bodyFontSize,
-                      color: AppColors.textMedium,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+        child: Padding(
+          padding: EdgeInsets.all(AppConstants.buttonSpacing),
+          child: Column(
+            children: [
+              // Compact header
+              Text(
+                'RealVision',
+                style: TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textDark,
+                ),
               ),
-            ),
-            
-            // Scrollable test buttons
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(horizontal: AppConstants.buttonSpacing),
+              SizedBox(height: 12),
+              
+              // Test buttons (no scrolling needed)
+              Expanded(
                 child: Consumer<TestProgress>(
                   builder: (context, progress, child) {
                     return Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         TestButton(
                           icon: Icons.mic,
@@ -94,16 +80,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           onPressed: () async {
                             if (_initialized) {
                               await _audioService.speak('Starting speech test');
+                              await Future.delayed(Duration(milliseconds: AppConstants.audioInstructionDelay));
                             }
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const SpeechTestScreen(),
-                              ),
-                            );
+                            if (mounted) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const SpeechTestScreen(),
+                                ),
+                              );
+                            }
                           },
                         ),
-                        SizedBox(height: AppConstants.buttonSpacing),
                         
                         TestButton(
                           icon: Icons.remove_red_eye,
@@ -113,35 +101,39 @@ class _HomeScreenState extends State<HomeScreen> {
                           onPressed: () async {
                             if (_initialized) {
                               await _audioService.speak('Starting eye tracking test');
+                              await Future.delayed(Duration(milliseconds: AppConstants.audioInstructionDelay));
                             }
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const EyeTrackingScreen(),
-                              ),
-                            );
+                            if (mounted) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const EyeTrackingScreen(),
+                                ),
+                              );
+                            }
                           },
                         ),
-                        SizedBox(height: AppConstants.buttonSpacing),
                         
                         TestButton(
                           icon: Icons.sentiment_satisfied,
-                          title: 'Facial Expression',
-                          description: 'Smile test',
+                          title: 'Smile Test',
+                          description: 'Facial expression',
                           completed: progress.smileCompleted,
                           onPressed: () async {
                             if (_initialized) {
                               await _audioService.speak('Starting smile test');
+                              await Future.delayed(Duration(milliseconds: AppConstants.audioInstructionDelay));
                             }
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const FacialExpressionScreen(),
-                              ),
-                            );
+                            if (mounted) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const FacialExpressionScreen(),
+                                ),
+                              );
+                            }
                           },
                         ),
-                        SizedBox(height: AppConstants.buttonSpacing),
                         
                         TestButton(
                           icon: Icons.directions_walk,
@@ -151,16 +143,20 @@ class _HomeScreenState extends State<HomeScreen> {
                           onPressed: () async {
                             if (_initialized) {
                               await _audioService.speak('Starting walking test');
+                              await Future.delayed(Duration(milliseconds: AppConstants.audioInstructionDelay));
                             }
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const GaitTestScreen(),
-                              ),
-                            );
+                            if (mounted) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const GaitTestScreen(),
+                                ),
+                              );
+                            }
                           },
                         ),
-                        SizedBox(height: AppConstants.buttonSpacing * 2),
+                        
+                        SizedBox(height: 8),
                         
                         SizedBox(
                           width: double.infinity,
@@ -176,22 +172,21 @@ class _HomeScreenState extends State<HomeScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.success,
                               disabledBackgroundColor: AppColors.border,
-                              padding: EdgeInsets.all(AppConstants.buttonPadding),
+                              padding: EdgeInsets.all(20),
                             ),
                             child: Text(
                               'View Results',
-                              style: TextStyle(fontSize: AppConstants.buttonFontSize),
+                              style: TextStyle(fontSize: 24),
                             ),
                           ),
                         ),
-                        SizedBox(height: AppConstants.buttonSpacing),
                       ],
                     );
                   },
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -203,19 +198,43 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) => AlertDialog(
         title: Text(
           'Assessment Complete',
-          style: TextStyle(fontSize: AppConstants.headingFontSize),
+          style: TextStyle(fontSize: 32),
         ),
         content: Text(
-          'All tests have been completed. Results will be analyzed by your healthcare provider.',
-          style: TextStyle(fontSize: AppConstants.bodyFontSize),
+          'All tests completed. Results will be analyzed.',
+          style: TextStyle(fontSize: 20),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'OK',
-              style: TextStyle(fontSize: AppConstants.bodyFontSize),
-            ),
+            onPressed: () {
+              // Option to redo tests
+              Navigator.pop(context);
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: Text('Redo Tests?', style: TextStyle(fontSize: 28)),
+                  content: Text(
+                    'Would you like to redo any tests?',
+                    style: TextStyle(fontSize: 20),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        // Reset progress
+                        Provider.of<TestProgress>(context, listen: false).resetProgress();
+                        Navigator.pop(ctx);
+                      },
+                      child: Text('Yes, Redo All', style: TextStyle(fontSize: 20)),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text('No, Keep Results', style: TextStyle(fontSize: 20)),
+                    ),
+                  ],
+                ),
+              );
+            },
+            child: Text('OK', style: TextStyle(fontSize: 22)),
           ),
         ],
       ),

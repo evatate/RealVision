@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../utils/colors.dart';
-import '../utils/constants.dart';
 
 class TestButton extends StatelessWidget {
   final IconData icon;
@@ -24,27 +23,27 @@ class TestButton extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: completed ? AppColors.success : AppColors.border,
-          width: 4,
+          width: 3,
         ),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: EdgeInsets.all(AppConstants.buttonPadding),
+            padding: const EdgeInsets.all(16.0),
             child: Row(
               children: [
                 Icon(
                   icon,
-                  size: 56,
+                  size: 40,
                   color: AppColors.primary,
                 ),
-                SizedBox(width: 24),
+                SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,16 +51,16 @@ class TestButton extends StatelessWidget {
                       Text(
                         title,
                         style: TextStyle(
-                          fontSize: AppConstants.bodyFontSize + 4,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
                           color: AppColors.textDark,
                         ),
                       ),
-                      SizedBox(height: 4),
+                      SizedBox(height: 2),
                       Text(
                         description,
                         style: TextStyle(
-                          fontSize: 20,
+                          fontSize: 16,
                           color: AppColors.textMedium,
                         ),
                       ),
@@ -71,7 +70,7 @@ class TestButton extends StatelessWidget {
                 if (completed)
                   Icon(
                     Icons.check_circle,
-                    size: 48,
+                    size: 36,
                     color: AppColors.success,
                   ),
               ],
