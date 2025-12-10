@@ -45,7 +45,7 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Please install Google Fit or Samsung Health and grant permissions',
+              'Please install Google Fit and grant permissions',
               style: TextStyle(fontSize: 18),
             ),
             duration: Duration(seconds: 4),
@@ -60,9 +60,7 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
         _startTime = DateTime.now();
       });
 
-      await _audioService.speak(
-        'Please walk normally for the next 2 minutes',
-      );
+      await _audioService.speak('Please walk normally for the next 2 minutes');
 
       _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (!mounted) {
@@ -126,7 +124,7 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
           children: [
             const Breadcrumb(current: 'Walking Test'),
             Expanded(
-              child: SingleChildScrollView( // MAKES IT SCROLLABLE - FIXES OVERFLOW
+              child: Padding(
                 padding: EdgeInsets.all(AppConstants.buttonSpacing),
                 child: _isRecording
                     ? _buildRecordingScreen()
@@ -143,66 +141,44 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
+        Icon(
+          Icons.directions_walk,
+          size: 80,
+          color: AppColors.primary,
+        ),
+        SizedBox(height: 32),
+        
+        // Main instruction as header
         Text(
-          'Walking Test',
+          'Please walk normally for 2 minutes',
           style: TextStyle(
-            fontSize: AppConstants.headingFontSize,
+            fontSize: 28,
             fontWeight: FontWeight.bold,
             color: AppColors.textDark,
           ),
+          textAlign: TextAlign.center,
         ),
-        SizedBox(height: AppConstants.buttonSpacing * 2),
-        Container(
-          padding: EdgeInsets.all(AppConstants.buttonPadding),
-          decoration: BoxDecoration(
-            color: AppColors.cardBackground,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border, width: 2),
-          ),
-          child: Column(
-            children: [
-              Icon(
-                Icons.directions_walk,
-                size: 80,
-                color: AppColors.primary,
-              ),
-              SizedBox(height: 24),
-              Text(
-                'This test uses your phone\'s step counter to analyze your walking pattern',
-                style: TextStyle(
-                  fontSize: AppConstants.bodyFontSize,
-                  color: AppColors.textDark,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Please walk normally for 2 minutes',
-                style: TextStyle(
-                  fontSize: 20,
-                  color: AppColors.textMedium,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-        SizedBox(height: AppConstants.buttonSpacing * 2),
+        
+        SizedBox(height: 48),
+        
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: _startTest,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
-              padding: EdgeInsets.all(AppConstants.buttonPadding),
+              padding: EdgeInsets.all(24),
             ),
             child: Text(
               'Start Walking Test',
-              style: TextStyle(fontSize: AppConstants.buttonFontSize),
+              style: TextStyle(fontSize: 24),
             ),
           ),
         ),
-        SizedBox(height: AppConstants.buttonSpacing),
+        
+        SizedBox(height: 32),
+        
+        // Larger install instructions
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -210,20 +186,13 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.orange[300]!, width: 2),
           ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, color: Colors.orange[700], size: 28),
-              SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  'Install Google Fit or Samsung Health for step tracking',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: AppColors.textDark,
-                  ),
-                ),
-              ),
-            ],
+          child: Text(
+            'Install Google Fit or Samsung Health for step tracking',
+            style: TextStyle(
+              fontSize: 20, // Larger!
+              color: AppColors.textDark,
+            ),
+            textAlign: TextAlign.center,
           ),
         ),
       ],
@@ -236,19 +205,22 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
       children: [
         Icon(
           Icons.directions_walk,
-          size: 120,
+          size: 100,
           color: AppColors.primary,
         ),
-        SizedBox(height: AppConstants.buttonSpacing),
+        SizedBox(height: 32),
+        
         Text(
           'Recording Walk',
           style: TextStyle(
-            fontSize: AppConstants.headingFontSize,
+            fontSize: 32,
             fontWeight: FontWeight.bold,
             color: AppColors.textDark,
           ),
         ),
-        SizedBox(height: AppConstants.buttonSpacing * 2),
+        
+        SizedBox(height: 48),
+        
         Text(
           '${_countdown}s',
           style: TextStyle(
@@ -257,11 +229,13 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
             color: AppColors.primary,
           ),
         ),
-        SizedBox(height: AppConstants.buttonSpacing),
+        
+        SizedBox(height: 24),
+        
         Text(
           'Keep walking normally',
           style: TextStyle(
-            fontSize: AppConstants.bodyFontSize,
+            fontSize: 24,
             color: AppColors.textMedium,
           ),
         ),

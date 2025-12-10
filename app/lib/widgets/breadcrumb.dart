@@ -30,7 +30,7 @@ class Breadcrumb extends StatelessWidget {
           const SizedBox(width: 16),
           const Icon(
             Icons.arrow_forward,
-            size: 24,
+            size: 0, // changed to remove
             color: AppColors.textMedium,
           ),
           const SizedBox(width: 16),

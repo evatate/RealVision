@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/colors.dart';
+import '../utils/constants.dart';
 
 class TestButton extends StatelessWidget {
   final IconData icon;
@@ -35,42 +36,29 @@ class TestButton extends StatelessWidget {
           onTap: onPressed,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Row(
               children: [
                 Icon(
                   icon,
-                  size: 40,
+                  size: 48,
                   color: AppColors.primary,
                 ),
-                SizedBox(width: 16),
+                SizedBox(width: 20),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textDark,
-                        ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        description,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: AppColors.textMedium,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: AppConstants.testTitleFontSize,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textDark,
+                    ),
                   ),
                 ),
                 if (completed)
                   Icon(
                     Icons.check_circle,
-                    size: 36,
+                    size: 40,
                     color: AppColors.success,
                   ),
               ],

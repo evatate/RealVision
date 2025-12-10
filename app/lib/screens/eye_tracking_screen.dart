@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
 import '../models/test_progress.dart';
@@ -25,6 +26,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   
   EyeTrackingTask _currentTask = EyeTrackingTask.none;
   int _trialNumber = 0;
+  bool _isPractice = false;
   Offset? _targetPosition;
   Timer? _taskTimer;
   bool _cameraInitialized = false;
@@ -53,53 +55,108 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     super.dispose();
   }
 
-  Future<void> _startFixationTest() async {
-    try {
-      await _cameraService.initialize();
-      if (!mounted) return;
-      
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      setState(() {
-        _currentTask = EyeTrackingTask.fixation;
-        _trialNumber = 0;
-        _cameraInitialized = true;
-        _showTarget = true;
-        _targetPosition = const Offset(0.5, 0.5); // CENTER
-      });
-      
-      await _audioService.speak(
-        'Look closely at the red cross without blinking for 10 seconds. Trial 1 of ${AppConstants.fixationTrials}.',
-      );
+  void _showInstructions(String title, String instruction, VoidCallback onStart) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(title, style: TextStyle(fontSize: 28)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              instruction,
+              style: TextStyle(fontSize: 20),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 24),
+            Text(
+              'Starting with practice round...',
+              style: TextStyle(
+                fontSize: 18,
+                fontStyle: FontStyle.italic,
+                color: AppColors.textMedium,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              onStart();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: EdgeInsets.all(16),
+            ),
+            child: Text('Start', style: TextStyle(fontSize: 22)),
+          ),
+        ],
+      ),
+    );
+  }
 
-      _runFixationTrial();
-    } catch (e) {
-      print('Camera error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Camera error: $e')),
-        );
-      }
-    }
+  Future<void> _startFixationTest() async {
+    _showInstructions(
+      'Fixation Stability Test',
+      'Look closely at the red cross without blinking for 10 seconds',
+      () async {
+        try {
+          await _cameraService.initialize();
+          if (!mounted) return;
+          
+          await Future.delayed(const Duration(milliseconds: 500));
+          
+          setState(() {
+            _currentTask = EyeTrackingTask.fixation;
+            _isPractice = true;
+            _trialNumber = 0;
+            _cameraInitialized = true;
+            _showTarget = true;
+            _targetPosition = const Offset(0.5, 0.5);
+          });
+          
+          await _audioService.speak('Practice trial. Look at the red cross.');
+          _runFixationTrial();
+        } catch (e) {
+          print('Camera error: $e');
+        }
+      },
+    );
   }
 
   void _runFixationTrial() {
-    if (_trialNumber >= AppConstants.fixationTrials) {
-      _completeFixationTest();
+    final maxTrials = _isPractice 
+        ? AppConstants.fixationPracticeTrials 
+        : AppConstants.fixationTestTrials;
+    
+    if (_trialNumber >= maxTrials) {
+      if (_isPractice) {
+        // Practice done, start real trials
+        setState(() {
+          _isPractice = false;
+          _trialNumber = 0;
+        });
+        _audioService.speak('Practice complete. Starting test trials. Trial 1 of ${AppConstants.fixationTestTrials}');
+        Future.delayed(const Duration(seconds: 2), _runFixationTrial);
+      } else {
+        // All done
+        _completeFixationTest();
+      }
       return;
     }
 
     _trialNumber++;
-    
-    // keep cross in center for entire duration
     setState(() => _targetPosition = const Offset(0.5, 0.5));
     
     _taskTimer = Timer(Duration(seconds: AppConstants.fixationDuration), () {
-      if (_trialNumber < AppConstants.fixationTrials) {
-        _audioService.speak('Trial ${_trialNumber + 1} of ${AppConstants.fixationTrials}');
+      if (_trialNumber < maxTrials) {
+        final label = _isPractice ? 'practice' : 'test';
+        _audioService.speak('${label.capitalize()} trial ${_trialNumber + 1}');
         Future.delayed(const Duration(seconds: 2), _runFixationTrial);
       } else {
-        _completeFixationTest();
+        _runFixationTrial(); // Will trigger next phase or completion
       }
     });
   }
@@ -117,53 +174,63 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   }
 
   Future<void> _startProsaccadeTest() async {
-    try {
-      await _cameraService.initialize();
-      if (!mounted) return;
-      
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      setState(() {
-        _currentTask = EyeTrackingTask.prosaccade;
-        _trialNumber = 0;
-        _cameraInitialized = true;
-      });
-      
-      await _audioService.speak(
-        'Look at the target circle as quickly as possible when it appears',
-      );
-
-      _runProsaccadeTrial();
-    } catch (e) {
-      print('Camera error: $e');
-    }
+    _showInstructions(
+      'Pro-saccade Test',
+      'Look at the target circle as quickly as possible when it appears',
+      () async {
+        try {
+          await _cameraService.initialize();
+          if (!mounted) return;
+          
+          setState(() {
+            _currentTask = EyeTrackingTask.prosaccade;
+            _isPractice = true;
+            _trialNumber = 0;
+            _cameraInitialized = true;
+          });
+          
+          await _audioService.speak('Practice trials. Look at targets quickly.');
+          _runProsaccadeTrial();
+        } catch (e) {
+          print('Camera error: $e');
+        }
+      },
+    );
   }
 
   void _runProsaccadeTrial() {
-    if (_trialNumber >= AppConstants.prosaccadeTestTrials) {
-      Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
-      _audioService.speak('Pro-saccade test complete');
-      if (mounted) {
+    final maxTrials = _isPractice
+        ? AppConstants.prosaccadePracticeTrials
+        : AppConstants.prosaccadeTestTrials;
+    
+    if (_trialNumber >= maxTrials) {
+      if (_isPractice) {
         setState(() {
-          _currentTask = EyeTrackingTask.none;
+          _isPractice = false;
           _trialNumber = 0;
         });
+        _audioService.speak('Practice complete. Starting test trials.');
+        Future.delayed(const Duration(seconds: 2), _runProsaccadeTrial);
+      } else {
+        Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
+        _audioService.speak('Pro-saccade test complete');
+        if (mounted) {
+          setState(() {
+            _currentTask = EyeTrackingTask.none;
+            _trialNumber = 0;
+          });
+        }
+        _cameraService.dispose();
       }
-      _cameraService.dispose();
       return;
     }
 
     final positions = [
-      const Offset(0.3, 0.5),  // 5° left
-      const Offset(0.7, 0.5),  // 5° right
-      const Offset(0.2, 0.5),  // 10° left
-      const Offset(0.8, 0.5),  // 10° right
-      const Offset(0.1, 0.5),  // 15° left
-      const Offset(0.9, 0.5),  // 15° right
-      const Offset(0.5, 0.3),  // 5° up
-      const Offset(0.5, 0.7),  // 5° down
-      const Offset(0.5, 0.2),  // 10° up
-      const Offset(0.5, 0.8),  // 10° down
+      const Offset(0.3, 0.5), const Offset(0.7, 0.5),
+      const Offset(0.2, 0.5), const Offset(0.8, 0.5),
+      const Offset(0.1, 0.5), const Offset(0.9, 0.5),
+      const Offset(0.5, 0.3), const Offset(0.5, 0.7),
+      const Offset(0.5, 0.2), const Offset(0.5, 0.8),
     ];
 
     setState(() {
@@ -173,58 +240,70 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     
     Future.delayed(const Duration(milliseconds: 500), () {
       if (!mounted || _currentTask != EyeTrackingTask.prosaccade) return;
-      
       setState(() => _showTarget = false);
       
       Future.delayed(const Duration(milliseconds: 200), () {
         if (!mounted || _currentTask != EyeTrackingTask.prosaccade) return;
-        
         final pos = positions[_trialNumber % positions.length];
         setState(() {
           _targetPosition = pos;
           _showTarget = true;
           _trialNumber++;
         });
-        
         Future.delayed(const Duration(milliseconds: 1500), _runProsaccadeTrial);
       });
     });
   }
 
   Future<void> _startSmoothPursuitTest() async {
-    try {
-      await _cameraService.initialize();
-      if (!mounted) return;
-      
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      setState(() {
-        _currentTask = EyeTrackingTask.pursuit;
-        _trialNumber = 0;
-        _cameraInitialized = true;
-      });
-      
-      await _audioService.speak(
-        'Follow the red circle with your eyes as closely as possible',
-      );
-
-      _runPursuitTrial();
-    } catch (e) {
-      print('Camera error: $e');
-    }
+    _showInstructions(
+      'Smooth Pursuit Test',
+      'Follow the red circle with your eyes as closely as possible',
+      () async {
+        try {
+          await _cameraService.initialize();
+          if (!mounted) return;
+          
+          setState(() {
+            _currentTask = EyeTrackingTask.pursuit;
+            _isPractice = true;
+            _trialNumber = 0;
+            _cameraInitialized = true;
+          });
+          
+          await _audioService.speak('Practice trials. Follow the red circle.');
+          _runPursuitTrial();
+        } catch (e) {
+          print('Camera error: $e');
+        }
+      },
+    );
   }
 
   void _runPursuitTrial() {
-    if (_trialNumber >= AppConstants.smoothPursuitTestTrials) {
-      Provider.of<TestProgress>(context, listen: false).markPursuitCompleted();
-      _audioService.speak('Smooth pursuit test complete');
-      if (mounted) {
+    final maxTrials = _isPractice
+        ? AppConstants.smoothPursuitPracticeTrials
+        : AppConstants.smoothPursuitTestTrials;
+    
+    if (_trialNumber >= maxTrials) {
+      if (_isPractice) {
         setState(() {
-          _currentTask = EyeTrackingTask.none;
+          _isPractice = false;
           _trialNumber = 0;
         });
+        _audioService.speak('Practice complete. Starting test trials.');
+        Future.delayed(const Duration(seconds: 2), _runPursuitTrial);
+      } else {
+        Provider.of<TestProgress>(context, listen: false).markPursuitCompleted();
+        _audioService.speak('Smooth pursuit test complete');
+        if (mounted) {
+          setState(() {
+            _currentTask = EyeTrackingTask.none;
+            _trialNumber = 0;
+          });
+        }
+        _cameraService.dispose();
       }
-      _cameraService.dispose();
       return;
     }
 
@@ -249,7 +328,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
       }
 
       final position = 0.5 + 0.2 * sin(2 * pi * frequency * elapsed);
-      
       setState(() {
         _targetPosition = isHorizontal
             ? Offset(position, 0.5)
@@ -292,29 +370,20 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             ),
           ),
           SizedBox(height: AppConstants.buttonSpacing * 2),
-          _buildTaskButton(
-            'Fixation Stability Test',
-            'Look at a red cross for 10 seconds',
-            _startFixationTest,
-          ),
+          
+          _buildTaskButton('Fixation Stability Test', _startFixationTest),
           SizedBox(height: AppConstants.buttonSpacing),
-          _buildTaskButton(
-            'Pro-saccade Test',
-            'Look at targets as they appear',
-            _startProsaccadeTest,
-          ),
+          
+          _buildTaskButton('Pro-saccade Test', _startProsaccadeTest),
           SizedBox(height: AppConstants.buttonSpacing),
-          _buildTaskButton(
-            'Smooth Pursuit Test',
-            'Follow a moving red circle',
-            _startSmoothPursuitTest,
-          ),
+          
+          _buildTaskButton('Smooth Pursuit Test', _startSmoothPursuitTest),
         ],
       ),
     );
   }
 
-  Widget _buildTaskButton(String title, String description, VoidCallback onPressed) {
+  Widget _buildTaskButton(String title, VoidCallback onPressed) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
@@ -324,27 +393,13 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
           foregroundColor: Colors.white,
           padding: EdgeInsets.all(AppConstants.buttonPadding),
         ),
-        child: Column(
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: AppConstants.bodyFontSize,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              description,
-              style: const TextStyle(
-                fontSize: 20,
-                color: Colors.white,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+        child: Text(
+          title,
+          style: TextStyle(
+            fontSize: AppConstants.testTitleFontSize,
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: TextAlign.center,
         ),
       ),
     );
@@ -353,10 +408,8 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   Widget _buildTaskScreen() {
     return Stack(
       children: [
-        // Full screen black background
         Container(color: Colors.black),
         
-        // Main test area with targets
         Center(
           child: _showTarget && _targetPosition != null
               ? FractionallySizedBox(
@@ -364,10 +417,9 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
                   heightFactor: 1.0,
                   child: Stack(
                     children: [
-                      // Target positioned as fraction of screen
                       Positioned(
-                        left: MediaQuery.of(context).size.width * _targetPosition!.dx - 30,
-                        top: MediaQuery.of(context).size.height * _targetPosition!.dy - 30,
+                        left: MediaQuery.of(context).size.width * _targetPosition!.dx - 40,
+                        top: MediaQuery.of(context).size.height * _targetPosition!.dy - 40,
                         child: _buildTarget(),
                       ),
                     ],
@@ -376,8 +428,8 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
               : const SizedBox.shrink(),
         ),
         
-        // camera preview (small, in corner, ONLY for eye tracking)
-        if (_cameraInitialized && _cameraService.controller != null)
+        // Camera preview (only in debug mode)
+        if (kDebugMode && _cameraInitialized && _cameraService.controller != null)
           Positioned(
             top: 16,
             right: 16,
@@ -395,24 +447,25 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             ),
           ),
         
-        // Trial counter at bottom
         Positioned(
           bottom: 32,
           left: 0,
           right: 0,
           child: Center(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.black87,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.white, width: 2),
               ),
               child: Text(
-                'Trial $_trialNumber',
+                _isPractice 
+                    ? 'Practice Trial $_trialNumber'
+                    : 'Test Trial $_trialNumber',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 28,
+                  fontSize: 24,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -426,34 +479,27 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   Widget _buildTarget() {
     switch (_currentTask) {
       case EyeTrackingTask.fixation:
-        // red cross, centered
-        return Icon(
-          Icons.add,
-          size: 80,
-          color: AppColors.fixationCross,
-        );
-        
+        return Icon(Icons.add, size: 80, color: AppColors.fixationCross);
       case EyeTrackingTask.prosaccade:
         return Container(
           width: 50,
           height: 50,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: AppColors.prosaccadeCenter,
+            color: Colors.black,
             border: Border.all(color: Colors.white, width: 2),
           ),
           child: Center(
             child: Container(
               width: 18,
               height: 18,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.prosaccadeInner,
+                color: Colors.white,
               ),
             ),
           ),
         );
-        
       case EyeTrackingTask.pursuit:
         return Container(
           width: 40,
@@ -463,9 +509,14 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             color: AppColors.pursuitTarget,
           ),
         );
-        
       default:
         return const SizedBox.shrink();
     }
+  }
+}
+
+extension StringExtension on String {
+  String capitalize() {
+    return "${this[0].toUpperCase()}${substring(1)}";
   }
 }

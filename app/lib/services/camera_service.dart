@@ -16,11 +16,12 @@ class CameraService {
       orElse: () => _cameras!.first,
     );
     
-    _controller = CameraController(
-      frontCamera,
-      ResolutionPreset.high,
-      enableAudio: false,
-    );
+  _controller = CameraController(
+    frontCamera,
+    ResolutionPreset.medium, // Changed from 'high'
+    enableAudio: false,
+    imageFormatGroup: ImageFormatGroup.yuv420, // More efficient
+  );
     
     await _controller!.initialize();
   }

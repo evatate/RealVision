@@ -17,7 +17,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
   final AudioService _audioService = AudioService();
   bool _isListening = false;
   String _transcript = '';
-  String _interimTranscript = '';
   bool _initialized = false;
 
   @override
@@ -30,10 +29,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     try {
       await _audioService.initialize();
       setState(() => _initialized = true);
-      
-      // Wait a bit before speaking
       await Future.delayed(const Duration(milliseconds: 500));
-      
       await _audioService.speak(
         'Please describe everything you see happening in this picture. Take your time.',
       );
@@ -47,23 +43,19 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     setState(() {
       _isListening = true;
       _transcript = '';
-      _interimTranscript = '';
     });
     
     try {
       await _audioService.startListening(
         onResult: (text) {
-          setState(() {
-            _transcript = text;
-            _interimTranscript = text;
-          });
+          setState(() => _transcript = text);
         },
         onError: (error) {
           print('Speech recognition error: $error');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Microphone error: $error'),
+                content: Text('Microphone error. Please check permissions.'),
                 duration: const Duration(seconds: 3),
               ),
             );
@@ -71,7 +63,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
         },
       );
 
-      // Auto-stop after 2 minutes
       Future.delayed(Duration(seconds: AppConstants.speechTestDuration), () {
         if (_isListening) {
           _stopTest();
@@ -92,17 +83,15 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       await _audioService.speak('Thank you. Speech test complete.');
       
       print('Speech transcript: $_transcript');
-      // TODO: Save transcript for ML inference
       
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) Navigator.pop(context);
       });
     } else {
-      // No transcript recorded
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No speech detected. Please try again with microphone enabled.'),
+            content: Text('No speech detected. Please try again.'),
           ),
         );
       }
@@ -128,32 +117,25 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                 padding: EdgeInsets.all(AppConstants.buttonSpacing),
                 child: Column(
                   children: [
-                    Text(
-                      'Cookie Theft Picture',
-                      style: TextStyle(
-                        fontSize: AppConstants.headingFontSize,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textDark,
-                      ),
-                    ),
-                    SizedBox(height: AppConstants.buttonSpacing),
+                    // Image only, no label
                     Container(
                       decoration: BoxDecoration(
                         color: AppColors.cardBackground,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: AppColors.border, width: 2),
                       ),
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(12),
                       child: Image.asset(
                         'assets/images/cookie_theft.png',
+                        height: 200,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
-                            height: 300,
+                            height: 200,
                             color: Colors.grey[300],
                             child: Center(
                               child: Text(
-                                'Cookie Theft Picture\n(Add image to assets/images/)',
-                                style: TextStyle(fontSize: 18),
+                                'Cookie Theft Picture\n(Add to assets/images/)',
+                                style: TextStyle(fontSize: 16),
                                 textAlign: TextAlign.center,
                               ),
                             ),
@@ -161,16 +143,19 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                         },
                       ),
                     ),
-                    SizedBox(height: AppConstants.buttonSpacing),
+                    SizedBox(height: 20),
+                    
                     Text(
-                      'Please describe everything you see happening in this picture',
+                      'Describe everything you see',
                       style: TextStyle(
-                        fontSize: AppConstants.bodyFontSize,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
                         color: AppColors.textDark,
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    SizedBox(height: AppConstants.buttonSpacing * 2),
+                    SizedBox(height: 24),
+                    
                     if (!_isListening)
                       SizedBox(
                         width: double.infinity,
@@ -179,11 +164,11 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                           icon: const Icon(Icons.mic, size: 32),
                           label: Text(
                             'Start Recording',
-                            style: TextStyle(fontSize: AppConstants.buttonFontSize),
+                            style: TextStyle(fontSize: 24),
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
-                            padding: EdgeInsets.all(AppConstants.buttonPadding),
+                            padding: EdgeInsets.all(20),
                           ),
                         ),
                       )
@@ -191,7 +176,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                       Column(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(24),
+                            padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
                               color: Colors.red[50],
                               borderRadius: BorderRadius.circular(16),
@@ -199,7 +184,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                             ),
                             child: const Icon(
                               Icons.mic,
-                              size: 64,
+                              size: 48,
                               color: Colors.red,
                             ),
                           ),
@@ -207,57 +192,48 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                           Text(
                             'Recording...',
                             style: TextStyle(
-                              fontSize: AppConstants.headingFontSize,
+                              fontSize: 28,
                               fontWeight: FontWeight.bold,
                               color: AppColors.textDark,
                             ),
                           ),
-                          SizedBox(height: AppConstants.buttonSpacing),
+                          SizedBox(height: 20),
+                          
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(24),
+                            padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: AppColors.cardBackground,
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: AppColors.border, width: 2),
                             ),
-                            constraints: const BoxConstraints(minHeight: 150),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'What you said:',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.textMedium,
-                                  ),
+                            constraints: const BoxConstraints(
+                              minHeight: 100,
+                              maxHeight: 200,
+                            ),
+                            child: SingleChildScrollView(
+                              child: Text(
+                                _transcript.isEmpty ? 'Speak now...' : _transcript,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: AppColors.textDark,
                                 ),
-                                SizedBox(height: 8),
-                                Text(
-                                  _transcript.isEmpty 
-                                      ? 'Speak now...' 
-                                      : _transcript,
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    color: AppColors.textDark,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
                           ),
-                          SizedBox(height: AppConstants.buttonSpacing),
+                          SizedBox(height: 20),
+                          
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
                               onPressed: _stopTest,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.red,
-                                padding: EdgeInsets.all(AppConstants.buttonPadding),
+                                padding: EdgeInsets.all(20),
                               ),
                               child: Text(
                                 'Stop Recording',
-                                style: TextStyle(fontSize: AppConstants.buttonFontSize),
+                                style: TextStyle(fontSize: 24),
                               ),
                             ),
                           ),

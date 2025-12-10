@@ -32,6 +32,9 @@ class AudioService {
             onResult(result.recognizedWords);
           },
           listenMode: ListenMode.dictation,
+          partialResults: true,
+          pauseFor: Duration(seconds: 10),
+          listenFor: Duration(seconds: 120),
         );
       } else {
         onError?.call('Speech recognition not available');
