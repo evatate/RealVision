@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
-import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import '../models/test_progress.dart';
 import '../services/camera_service.dart';
 import '../services/audio_service.dart';
@@ -23,12 +22,6 @@ class FacialExpressionScreen extends StatefulWidget {
 class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   final CameraService _cameraService = CameraService();
   final AudioService _audioService = AudioService();
-  final FaceDetector _faceDetector = FaceDetector(
-    options: FaceDetectorOptions(
-      enableClassification: true,
-      minFaceSize: 0.15,
-    ),
-  );
   
   SmilePhase _currentPhase = SmilePhase.none;
   int _countdown = 0;
@@ -37,10 +30,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   int _repetitionCount = 0;
   bool _isPractice = true;
   
-  // Face detection
   bool _isFaceDetected = true;
-  int _faceOutOfFrameCount = 0;
-  Timer? _faceCheckTimer;
 
   @override
   void initState() {
@@ -51,8 +41,6 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   @override
   void dispose() {
     _countdownTimer?.cancel();
-    _faceCheckTimer?.cancel();
-    _faceDetector.close();
     _cameraService.dispose();
     _audioService.dispose();
     super.dispose();
@@ -63,45 +51,48 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
         title: Text(
           'Smile Test',
-          style: TextStyle(fontSize: 28),
+          style: TextStyle(fontSize: 28, color: AppColors.textDark),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'You will be asked to:\n\n'
-              '1. Keep a neutral face (15 seconds)\n'
-              '2. Smile (15 seconds)\n'
-              '3. Return to neutral (15 seconds)\n\n'
-              'This will be done twice after a practice round.',
-              style: TextStyle(fontSize: 20),
+              'You will:\n\n'
+              '1. Keep neutral face (15s)\n'
+              '2. Smile (15s)\n'
+              '3. Return to neutral (15s)\n\n'
+              'Done twice after practice.',
+              style: TextStyle(fontSize: 20, color: AppColors.textDark),
               textAlign: TextAlign.center,
             ),
             SizedBox(height: 16),
             Text(
-              'Keep your face in the camera frame',
+              'Keep your face in frame',
               style: TextStyle(
                 fontSize: 18,
                 fontStyle: FontStyle.italic,
                 color: Colors.orange[700],
               ),
-              textAlign: TextAlign.center,
             ),
           ],
         ),
         actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _startTest();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              padding: EdgeInsets.all(16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _startTest();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: EdgeInsets.all(16),
+              ),
+              child: Text('Start', style: TextStyle(fontSize: 24, color: Colors.white)),
             ),
-            child: Text('Start', style: TextStyle(fontSize: 22)),
           ),
         ],
       ),
@@ -123,16 +114,10 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
         _repetitionCount = 0;
       });
       
-      await _audioService.speak('Practice round. Keep a neutral face for 15 seconds');
+      await _audioService.speak('Practice round. Keep neutral face');
       _startCountdown();
-      _startFaceDetection();
     } catch (e) {
       print('Camera error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Camera error: $e')),
-        );
-      }
     }
   }
 
@@ -145,30 +130,11 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
       
       setState(() {
         _countdown--;
-        
         if (_countdown <= 0) {
           timer.cancel();
           _nextPhase();
         }
       });
-    });
-  }
-
-  void _startFaceDetection() {
-    // Check face every 500ms
-    _faceCheckTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
-      if (!mounted || _cameraService.controller == null) {
-        timer.cancel();
-        return;
-      }
-      
-      try {
-        // In production, implement actual face detection here
-        // For now, assume face is always detected
-        setState(() => _isFaceDetected = true);
-      } catch (e) {
-        print('Face detection error: $e');
-      }
     });
   }
 
@@ -179,8 +145,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
           _currentPhase = SmilePhase.smile;
           _countdown = AppConstants.smilePhaseDuration;
         });
-        final label = _isPractice ? 'Practice. Now' : 'Now';
-        _audioService.speak('$label smile for 15 seconds');
+        _audioService.speak(_isPractice ? 'Practice. Smile now' : 'Smile now');
         _startCountdown();
         break;
         
@@ -189,19 +154,22 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
           _currentPhase = SmilePhase.neutral2;
           _countdown = AppConstants.smilePhaseDuration;
         });
-        _audioService.speak('Return to neutral face for 15 seconds');
+        _audioService.speak('Return to neutral face');
         _startCountdown();
         break;
         
       case SmilePhase.neutral2:
         if (_isPractice) {
-          // Practice done
-          _checkQualityAndContinue(isPractice: true);
+          setState(() {
+            _isPractice = false;
+            _currentPhase = SmilePhase.neutral;
+            _countdown = AppConstants.smilePhaseDuration;
+          });
+          _audioService.speak('Practice complete. Starting test. Keep neutral face');
+          _startCountdown();
         } else {
           _repetitionCount++;
-          
           if (_repetitionCount < AppConstants.smileTestRepetitions) {
-            // Start next repetition
             setState(() {
               _currentPhase = SmilePhase.neutral;
               _countdown = AppConstants.smilePhaseDuration;
@@ -209,8 +177,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
             _audioService.speak('Repetition ${_repetitionCount + 1}. Keep neutral face');
             _startCountdown();
           } else {
-            // All repetitions done
-            _checkQualityAndContinue(isPractice: false);
+            _completeTest();
           }
         }
         break;
@@ -218,72 +185,6 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
       default:
         break;
     }
-  }
-
-  void _checkQualityAndContinue({required bool isPractice}) {
-    // Check if face was out of frame too much
-    if (_faceOutOfFrameCount > 20) { // More than 10 seconds total
-      _showQualityDialog();
-    } else {
-      if (isPractice) {
-        // Practice done, start real trials
-        setState(() {
-          _isPractice = false;
-          _currentPhase = SmilePhase.neutral;
-          _countdown = AppConstants.smilePhaseDuration;
-          _faceOutOfFrameCount = 0; // Reset counter
-        });
-        _audioService.speak('Practice complete. Starting test. Keep neutral face.');
-        _startCountdown();
-      } else {
-        // All done!
-        _completeTest();
-      }
-    }
-  }
-
-  void _showQualityDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Test Quality Issue', style: TextStyle(fontSize: 28)),
-        content: Text(
-          'Your face was out of frame too often. Would you like to retake this test?',
-          style: TextStyle(fontSize: 20),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _completeTest(); // Save anyway
-            },
-            child: Text('Continue Anyway', style: TextStyle(fontSize: 20)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _retakeTest();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-            ),
-            child: Text('Retake Test', style: TextStyle(fontSize: 20)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _retakeTest() {
-    setState(() {
-      _currentPhase = SmilePhase.neutral;
-      _countdown = AppConstants.smilePhaseDuration;
-      _isPractice = false; // Skip practice
-      _repetitionCount = 0;
-      _faceOutOfFrameCount = 0;
-    });
-    _audioService.speak('Retaking test. Keep neutral face');
-    _startCountdown();
   }
 
   void _completeTest() {
@@ -359,91 +260,88 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
     );
   }
 
-  Widget _buildTestScreen() {
-    return Padding(
+Widget _buildTestScreen() {
+    return SingleChildScrollView(
       padding: EdgeInsets.all(AppConstants.buttonSpacing),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Camera preview
+          // camera with flexible height
           if (_cameraInitialized && _cameraService.controller != null)
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _isFaceDetected ? AppColors.success : Colors.red,
-                  width: 4,
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: AspectRatio(
-                  aspectRatio: 3 / 4,
-                  child: CameraPreview(_cameraService.controller!),
-                ),
-              ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final maxHeight = MediaQuery.of(context).size.height - 400;
+                final aspectRatio = 3 / 4;
+                final calculatedHeight = constraints.maxWidth / aspectRatio * 4 / 3;
+                final height = calculatedHeight > maxHeight ? maxHeight : calculatedHeight;
+                
+                return Container(
+                  height: height,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _isFaceDetected ? AppColors.success : Colors.red,
+                      width: 4,
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CameraPreview(_cameraService.controller!),
+                  ),
+                );
+              },
             )
           else
             Container(
-              height: 400,
+              height: 300,
               decoration: BoxDecoration(
                 color: Colors.grey[300],
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
-              ),
+              child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
             ),
           
-          SizedBox(height: 32),
+          SizedBox(height: 24),
           
-          // Phase indicator
-          Text(
-            _getPhaseEmoji(),
-            style: const TextStyle(fontSize: 60),
-          ),
+          Text(_getPhaseEmoji(), style: const TextStyle(fontSize: 50)),
+          SizedBox(height: 12),
           
-          SizedBox(height: 16),
-          
-          // Phase text
           Text(
             _getPhaseText(),
             style: TextStyle(
-              fontSize: 28,
+              fontSize: 24,
               fontWeight: FontWeight.bold,
               color: AppColors.textDark,
             ),
             textAlign: TextAlign.center,
           ),
           
-          SizedBox(height: 16),
+          SizedBox(height: 12),
           
-          // Countdown
           if (_currentPhase != SmilePhase.complete)
             Text(
               '${_countdown}s',
               style: TextStyle(
-                fontSize: 60,
+                fontSize: 50,
                 fontWeight: FontWeight.bold,
                 color: AppColors.primary,
               ),
             ),
           
-          // Warning if face out of frame
-          if (!_isFaceDetected)
+          // Warning indicator when face not detected
+          if (!_isFaceDetected && _currentPhase != SmilePhase.complete)
             Container(
               margin: EdgeInsets.only(top: 16),
               padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red[100],
+                color: Colors.red[50],
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.red, width: 2),
               ),
               child: Text(
                 '⚠️ Keep your face in frame',
                 style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.red[900],
+                  color: Colors.red[700],
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),

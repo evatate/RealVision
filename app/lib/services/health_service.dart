@@ -3,55 +3,77 @@ import 'dart:io' show Platform;
 
 class HealthService {
   final Health _health = Health();
+  bool _permissionsGranted = false;
   
-  /// Determines which health data types are supported on this platform
   List<HealthDataType> _getSupportedTypes() {
     if (Platform.isAndroid) {
-      // Android Health Connect only supports STEPS reliably
-      return [
-        HealthDataType.STEPS,
-      ];
+      return [HealthDataType.STEPS];
     } else if (Platform.isIOS) {
-      // iOS HealthKit supports more types
       return [
         HealthDataType.STEPS,
         HealthDataType.DISTANCE_WALKING_RUNNING,
         HealthDataType.WALKING_SPEED,
       ];
     } else {
-      // fallback for other platforms
       return [HealthDataType.STEPS];
     }
   }
   
-  /// Requests health data permissions
-  /// returns true if permissions granted, false otherwise
+  /// Requests health data permissions with retry logic
   Future<bool> requestPermissions() async {
+    // Check if already granted
+    if (_permissionsGranted) return true;
+    
     final types = _getSupportedTypes();
     final permissions = types.map((type) => HealthDataAccess.READ).toList();
     
     try {
-      // request authorization
-      bool? granted = await _health.requestAuthorization(
-        types,
-        permissions: permissions,
-      );
+      // First check if permissions already exist
+      bool? hasPermissions = await _health.hasPermissions(types, permissions: permissions);
       
-      if (granted == true) {
-        print('Health permissions granted for: $types');
+      if (hasPermissions == true) {
+        _permissionsGranted = true;
+        print('Health permissions already granted');
         return true;
-      } else {
-        print('Health permissions denied or not granted');
-        return false;
       }
+      
+      // Request authorization with retry
+      bool? granted = false;
+      int attempts = 0;
+      
+      while (!granted! && attempts < 3) {
+        attempts++;
+        print('Requesting health permissions (attempt $attempts)...');
+        
+        granted = await _health.requestAuthorization(
+          types,
+          permissions: permissions,
+        );
+        
+        if (granted == true) {
+          _permissionsGranted = true;
+          print('Health permissions granted on attempt $attempts');
+          return true;
+        }
+        
+        // Wait before retry
+        if (attempts < 3) {
+          await Future.delayed(Duration(seconds: 1));
+        }
+      }
+      
+      print('Health permissions denied after $attempts attempts');
+      return false;
+      
     } catch (e) {
       print('Error requesting health permissions: $e');
       
-      // show platform-specific error messages
+      // Platform-specific guidance
       if (Platform.isAndroid) {
-        print('Android: Make sure Google Fit or Samsung Health is installed');
+        print('Android: Install Google Fit or Samsung Health');
+        print('Then go to Settings > Apps > RealVision > Permissions');
       } else if (Platform.isIOS) {
-        print('iOS: Make sure HealthKit is enabled in app capabilities');
+        print('iOS: Enable in Settings > Privacy > Health');
       }
       
       return false;
@@ -59,15 +81,31 @@ class HealthService {
   }
   
   /// Gets gait/walking data from the health platform
-  /// Works on both Android (Health Connect) and iOS (HealthKit)
   Future<Map<String, dynamic>> getGaitData({
     required DateTime start,
     required DateTime end,
   }) async {
+    // Ensure permissions before fetching
+    if (!_permissionsGranted) {
+      bool granted = await requestPermissions();
+      if (!granted) {
+        return {
+          'steps': 0,
+          'distance': 0.0,
+          'avgSpeed': 0.0,
+          'cadence': 0.0,
+          'durationMinutes': 0.0,
+          'platform': Platform.isAndroid ? 'Android' : 'iOS',
+          'error': 'Permissions not granted',
+          'message': 'Please grant health permissions and try again',
+        };
+      }
+    }
+    
     final types = _getSupportedTypes();
     
     try {
-      // Fetch health data from the platform
+      // Fetch health data
       List<HealthDataPoint> healthData = await _health.getHealthDataFromTypes(
         startTime: start,
         endTime: end,
@@ -82,7 +120,7 @@ class HealthService {
           'cadence': 0.0,
           'durationMinutes': 0.0,
           'platform': Platform.isAndroid ? 'Android' : 'iOS',
-          'message': 'No data available. Make sure you walked during the test period.',
+          'message': 'No walking data detected. Make sure you walked during the test.',
         };
       }
       
@@ -104,22 +142,16 @@ class HealthService {
       // Calculate metrics
       double durationMinutes = end.difference(start).inSeconds / 60.0;
       
-      // Calculate average speed
       double avgSpeed;
       if (speeds.isNotEmpty) {
-        // iOS: Use actual walking speed from HealthKit
         avgSpeed = speeds.reduce((a, b) => a + b) / speeds.length;
       } else if (totalDistance > 0 && durationMinutes > 0) {
-        // Android: Calculate speed from distance and time
-        avgSpeed = totalDistance / durationMinutes; // meters per minute
+        avgSpeed = totalDistance / durationMinutes;
       } else {
         avgSpeed = 0.0;
       }
       
-      // Calculate cadence (steps per minute)
       double cadence = durationMinutes > 0 ? totalSteps / durationMinutes : 0;
-      
-      // Calculate speed variability (standard deviation)
       double speedVariability = _calculateVariability(speeds);
       
       return {
@@ -151,7 +183,6 @@ class HealthService {
     }
   }
   
-  /// Calculates standard deviation (variability) of a list of values
   double _calculateVariability(List<double> values) {
     if (values.length < 2) return 0.0;
     
@@ -161,28 +192,24 @@ class HealthService {
         .reduce((a, b) => a + b);
     double variance = sumSquaredDiff / values.length;
     
-    return variance; // Return variance (or use sqrt(variance) for standard deviation)
+    return variance;
   }
   
-  /// Returns platform-specific error message
   String _getPlatformSpecificErrorMessage() {
     if (Platform.isAndroid) {
-      return 'Android: Install Google Fit or Samsung Health and grant permissions in Settings';
+      return 'Android: Install Google Fit and grant permissions in Settings > Apps > RealVision';
     } else if (Platform.isIOS) {
-      return 'iOS: Enable HealthKit permissions in Settings → Privacy → Health';
+      return 'iOS: Enable permissions in Settings > Privacy > Health';
     } else {
       return 'Health data not available on this platform';
     }
   }
   
-  /// Checks if health data is available on this platform
   Future<bool> isHealthDataAvailable() async {
     try {
       if (Platform.isAndroid) {
-        // Check if Health Connect is available
         return await _health.hasPermissions(_getSupportedTypes()) ?? false;
       } else if (Platform.isIOS) {
-        // HealthKit is always available on iOS devices
         return true;
       }
       return false;

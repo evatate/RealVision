@@ -60,37 +60,64 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: Text(title, style: TextStyle(fontSize: 28)),
+        backgroundColor: AppColors.cardBackground,
+        title: Text(
+          title,
+          style: TextStyle(
+            fontSize: 28,
+            color: AppColors.textDark,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               instruction,
-              style: TextStyle(fontSize: 20),
+              style: TextStyle(
+                fontSize: 22,
+                color: AppColors.textDark,
+              ),
               textAlign: TextAlign.center,
             ),
             SizedBox(height: 24),
-            Text(
-              'Starting with practice round...',
-              style: TextStyle(
-                fontSize: 18,
-                fontStyle: FontStyle.italic,
-                color: AppColors.textMedium,
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue[300]!, width: 2),
+              ),
+              child: Text(
+                'Starting with practice round...',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.blue[900],
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ],
         ),
         actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              onStart();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              padding: EdgeInsets.all(16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                onStart();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.all(16),
+              ),
+              child: Text(
+                'Start',
+                style: TextStyle(fontSize: 24, color: Colors.white),
+              ),
             ),
-            child: Text('Start', style: TextStyle(fontSize: 22)),
           ),
         ],
       ),

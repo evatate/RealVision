@@ -18,6 +18,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
   bool _isListening = false;
   String _transcript = '';
   bool _initialized = false;
+  bool _hasSpoken = false;
 
   @override
   void initState() {
@@ -29,10 +30,16 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     try {
       await _audioService.initialize();
       setState(() => _initialized = true);
-      await Future.delayed(const Duration(milliseconds: 500));
-      await _audioService.speak(
-        'Please describe everything you see happening in this picture. Take your time.',
-      );
+      
+      // Wait before speaking to avoid overlap
+      await Future.delayed(const Duration(milliseconds: 1500));
+      
+      if (mounted && !_hasSpoken) {
+        await _audioService.speak(
+          'Please describe everything you see happening in this picture. Take your time.',
+        );
+        _hasSpoken = true;
+      }
     } catch (e) {
       print('Audio initialization error: $e');
       setState(() => _initialized = true);
@@ -48,14 +55,16 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     try {
       await _audioService.startListening(
         onResult: (text) {
-          setState(() => _transcript = text);
+          if (mounted) {
+            setState(() => _transcript = text);
+          }
         },
         onError: (error) {
           print('Speech recognition error: $error');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Microphone error. Please check permissions.'),
+                content: Text('Microphone error. Check permissions.'),
                 duration: const Duration(seconds: 3),
               ),
             );
@@ -63,23 +72,30 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
         },
       );
 
+      // Auto-stop after 2 minutes
       Future.delayed(Duration(seconds: AppConstants.speechTestDuration), () {
-        if (_isListening) {
+        if (mounted && _isListening) {
           _stopTest();
         }
       });
     } catch (e) {
       print('Error starting speech test: $e');
-      setState(() => _isListening = false);
+      if (mounted) {
+        setState(() => _isListening = false);
+      }
     }
   }
 
   Future<void> _stopTest() async {
     await _audioService.stopListening();
-    setState(() => _isListening = false);
+    if (mounted) {
+      setState(() => _isListening = false);
+    }
     
     if (_transcript.isNotEmpty) {
-      Provider.of<TestProgress>(context, listen: false).markSpeechCompleted();
+      if (mounted) {
+        Provider.of<TestProgress>(context, listen: false).markSpeechCompleted();
+      }
       await _audioService.speak('Thank you. Speech test complete.');
       
       print('Speech transcript: $_transcript');
@@ -117,7 +133,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                 padding: EdgeInsets.all(AppConstants.buttonSpacing),
                 child: Column(
                   children: [
-                    // Image only, no label
+                    // Image only
                     Container(
                       decoration: BoxDecoration(
                         color: AppColors.cardBackground,
@@ -127,10 +143,10 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                       padding: const EdgeInsets.all(12),
                       child: Image.asset(
                         'assets/images/cookie_theft.png',
-                        height: 200,
+                        height: 180,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
-                            height: 200,
+                            height: 180,
                             color: Colors.grey[300],
                             child: Center(
                               child: Text(
@@ -143,7 +159,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                         },
                       ),
                     ),
-                    SizedBox(height: 20),
+                    SizedBox(height: 16),
                     
                     Text(
                       'Describe everything you see',
@@ -154,7 +170,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    SizedBox(height: 24),
+                    SizedBox(height: 20),
                     
                     if (!_isListening)
                       SizedBox(
@@ -176,7 +192,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                       Column(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(20),
+                            padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: Colors.red[50],
                               borderRadius: BorderRadius.circular(16),
@@ -184,44 +200,44 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                             ),
                             child: const Icon(
                               Icons.mic,
-                              size: 48,
+                              size: 40,
                               color: Colors.red,
                             ),
                           ),
-                          SizedBox(height: 16),
+                          SizedBox(height: 12),
                           Text(
                             'Recording...',
                             style: TextStyle(
-                              fontSize: 28,
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
                               color: AppColors.textDark,
                             ),
                           ),
-                          SizedBox(height: 20),
+                          SizedBox(height: 16),
                           
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: AppColors.cardBackground,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: AppColors.border, width: 2),
                             ),
                             constraints: const BoxConstraints(
-                              minHeight: 100,
-                              maxHeight: 200,
+                              minHeight: 80,
+                              maxHeight: 150,
                             ),
                             child: SingleChildScrollView(
                               child: Text(
                                 _transcript.isEmpty ? 'Speak now...' : _transcript,
                                 style: TextStyle(
-                                  fontSize: 18,
+                                  fontSize: 16,
                                   color: AppColors.textDark,
                                 ),
                               ),
                             ),
                           ),
-                          SizedBox(height: 20),
+                          SizedBox(height: 16),
                           
                           SizedBox(
                             width: double.infinity,
@@ -229,11 +245,11 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                               onPressed: _stopTest,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.red,
-                                padding: EdgeInsets.all(20),
+                                padding: EdgeInsets.all(18),
                               ),
                               child: Text(
                                 'Stop Recording',
-                                style: TextStyle(fontSize: 24),
+                                style: TextStyle(fontSize: 22),
                               ),
                             ),
                           ),
