@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  get_it: ^7.6.4
   
   # smile
   google_mlkit_face_detection: ^0.10.0

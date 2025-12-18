@@ -7,14 +7,37 @@ class AudioService {
   final FlutterTts _flutterTts = FlutterTts();
   bool _isListening = false;
   bool _isInitialized = false;
+  Function(String)? _currentOnResult;
+  Function(String)? _currentOnError;
   
   Future<void> initialize() async {
     if (_isInitialized) return;
     
     try {
       bool available = await _speechToText.initialize(
-        onError: (error) => print('Speech init error: $error'),
-        onStatus: (status) => print('Speech status: $status'),
+        onError: (error) {
+          print('Speech init error: $error');
+          // Auto-restart on "no match" error
+          if (error.errorMsg == 'error_no_match' && _isListening) {
+            print('No match detected, restarting...');
+            Future.delayed(Duration(milliseconds: 500), () {
+              if (_isListening && _currentOnResult != null) {
+                _restartListening(_currentOnResult!, _currentOnError);
+              }
+            });
+          }
+        },
+        onStatus: (status) {
+          print('Speech status: $status');
+          // Auto-restart when recognition stops
+          if (status == 'done' && _isListening) {
+            Future.delayed(Duration(milliseconds: 500), () {
+              if (_isListening && _currentOnResult != null) {
+                _restartListening(_currentOnResult!, _currentOnError);
+              }
+            });
+          }
+        },
       );
       
       if (!available) {
@@ -57,8 +80,13 @@ class AudioService {
       return;
     }
     
+    // Store callbacks for auto-restart
+    _currentOnResult = onResult;
+    _currentOnError = onError;
+    
     if (_isListening) {
       await stopListening();
+      await Future.delayed(Duration(milliseconds: 500));
     }
     
     try {
@@ -67,19 +95,15 @@ class AudioService {
       await _speechToText.listen(
         onResult: (result) {
           onResult(result.recognizedWords);
-          
-          if (result.finalResult && _isListening) {
-            Future.delayed(Duration(milliseconds: 500), () {
-              if (_isListening) {
-                _restartListening(onResult, onError);
-              }
-            });
-          }
         },
-        listenFor: Duration(seconds: 30),
-        pauseFor: Duration(seconds: 5), 
+        listenFor: Duration(seconds: 60), // Long timeout
+        pauseFor: Duration(seconds: 10),  // Long pause before stopping
         localeId: 'en_US',
-        cancelOnError: false,
+        listenOptions: SpeechListenOptions(
+          partialResults: true,
+          onDevice: false,
+          listenMode: ListenMode.confirmation,
+        ),
       );
     } catch (e) {
       print('Listen error: $e');
@@ -94,28 +118,29 @@ class AudioService {
   ) async {
     if (!_isListening) return;
     
+    print('Restarting speech recognition...');
+    
     try {
-      await _speechToText.stop();
-      await Future.delayed(Duration(milliseconds: 300));
-      
-      if (_isListening) {
-        await _speechToText.listen(
-          onResult: (result) {
-            onResult(result.recognizedWords);
-            if (result.finalResult && _isListening) {
-              Future.delayed(Duration(milliseconds: 500), () {
-                if (_isListening) {
-                  _restartListening(onResult, onError);
-                }
-              });
-            }
-          },
-          listenFor: Duration(seconds: 30),
-          pauseFor: Duration(seconds: 5),
-          localeId: 'en_US',
-          cancelOnError: false,
-        );
+      if (_speechToText.isListening) {
+        await _speechToText.stop();
+        await Future.delayed(Duration(milliseconds: 300));
       }
+      
+      if (!_isListening) return;
+      
+      await _speechToText.listen(
+        onResult: (result) {
+          onResult(result.recognizedWords);
+        },
+        listenFor: Duration(seconds: 60),
+        pauseFor: Duration(seconds: 10),
+        localeId: 'en_US',
+        listenOptions: SpeechListenOptions(
+          partialResults: true,
+          onDevice: false,
+          listenMode: ListenMode.confirmation,
+        ),
+      );
     } catch (e) {
       print('Restart listen error: $e');
       onError?.call(e.toString());
@@ -124,6 +149,9 @@ class AudioService {
   
   Future<void> stopListening() async {
     _isListening = false;
+    _currentOnResult = null;
+    _currentOnError = null;
+    
     if (_speechToText.isListening) {
       await _speechToText.stop();
     }
@@ -134,6 +162,8 @@ class AudioService {
   
   void dispose() {
     _isListening = false;
+    _currentOnResult = null;
+    _currentOnError = null;
     _speechToText.cancel();
     _flutterTts.stop();
   }

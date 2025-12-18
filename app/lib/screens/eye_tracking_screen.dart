@@ -10,6 +10,7 @@ import '../utils/constants.dart';
 import '../widgets/breadcrumb.dart';
 import 'dart:async';
 import 'dart:math';
+import '../services/service_locator.dart';
 
 enum EyeTrackingTask { none, fixation, prosaccade, pursuit }
 
@@ -21,8 +22,8 @@ class EyeTrackingScreen extends StatefulWidget {
 }
 
 class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
-  final CameraService _cameraService = CameraService();
-  final AudioService _audioService = AudioService();
+  late CameraService _cameraService = CameraService();
+  late AudioService _audioService = AudioService();
   
   EyeTrackingTask _currentTask = EyeTrackingTask.none;
   int _trialNumber = 0;
@@ -35,6 +36,8 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   @override
   void initState() {
     super.initState();
+    _cameraService = getIt<CameraService>();
+    _audioService = getIt<AudioService>();
     _initializeServices();
   }
 

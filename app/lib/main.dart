@@ -3,10 +3,19 @@ import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
 import 'models/test_progress.dart';
 import 'utils/colors.dart';
+import '../services/service_locator.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const RealVisionApp());
+
+  setupServiceLocator();
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => TestProgress(),
+      child: const RealVisionApp(),
+    ),
+  );
 }
 
 class RealVisionApp extends StatelessWidget {
@@ -18,7 +27,7 @@ class RealVisionApp extends StatelessWidget {
       create: (_) => TestProgress(),
       child: MaterialApp(
         title: 'RealVision',
-        debugShowCheckedModeBanner: false, // REMOVES DEBUG BANNER
+        debugShowCheckedModeBanner: false,
         theme: ThemeData(
           primarySwatch: Colors.blue,
           scaffoldBackgroundColor: AppColors.background,

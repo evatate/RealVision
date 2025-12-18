@@ -28,11 +28,6 @@ class Breadcrumb extends StatelessWidget {
             padding: const EdgeInsets.all(16),
           ),
           const SizedBox(width: 16),
-          const Icon(
-            Icons.arrow_forward,
-            size: 0, // changed to remove
-            color: AppColors.textMedium,
-          ),
           const SizedBox(width: 16),
           Expanded(
             child: Text(

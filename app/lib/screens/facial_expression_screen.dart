@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import '../models/test_progress.dart';
 import '../services/camera_service.dart';
 import '../services/audio_service.dart';
+import '../services/face_detection_service.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../widgets/breadcrumb.dart';
@@ -22,6 +23,7 @@ class FacialExpressionScreen extends StatefulWidget {
 class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   final CameraService _cameraService = CameraService();
   final AudioService _audioService = AudioService();
+  final FaceDetectionService _faceDetector = FaceDetectionService();
   
   SmilePhase _currentPhase = SmilePhase.none;
   int _countdown = 0;
@@ -30,7 +32,9 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   int _repetitionCount = 0;
   bool _isPractice = true;
   
-  bool _isFaceDetected = true;
+  bool _isFaceDetected = false;
+  double _smileProbability = 0.0;
+  Timer? _faceDetectionTimer;
 
   @override
   void initState() {
@@ -41,8 +45,11 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    _faceDetectionTimer?.cancel();
+    _cameraService.stopImageStream();
     _cameraService.dispose();
     _audioService.dispose();
+    _faceDetector.dispose();
     super.dispose();
   }
 
@@ -69,12 +76,20 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
               textAlign: TextAlign.center,
             ),
             SizedBox(height: 16),
-            Text(
-              'Keep your face in frame',
-              style: TextStyle(
-                fontSize: 18,
-                fontStyle: FontStyle.italic,
-                color: Colors.orange[700],
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[300]!, width: 2),
+              ),
+              child: Text(
+                '⚠️ Keep your face in frame',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange[900],
+                ),
               ),
             ),
           ],
@@ -114,10 +129,38 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
         _repetitionCount = 0;
       });
       
+      // Start face detection
+      _startFaceDetection();
+      
       await _audioService.speak('Practice round. Keep neutral face');
       _startCountdown();
     } catch (e) {
       print('Camera error: $e');
+    }
+  }
+
+  void _startFaceDetection() async {
+    try {
+      await _cameraService.startImageStream((CameraImage image) async {
+        // Process every 500ms to avoid overload
+        if (_faceDetectionTimer?.isActive ?? false) return;
+        
+        _faceDetectionTimer = Timer(Duration(milliseconds: 500), () async {
+          final result = await _faceDetector.detectFace(
+            image,
+            InputImageRotation.rotation0deg, // Adjust based on camera orientation
+          );
+          
+          if (mounted) {
+            setState(() {
+              _isFaceDetected = result.faceDetected;
+              _smileProbability = result.smilingProbability;
+            });
+          }
+        });
+      });
+    } catch (e) {
+      print('Error starting face detection: $e');
     }
   }
 
@@ -189,6 +232,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
 
   void _completeTest() {
     setState(() => _currentPhase = SmilePhase.complete);
+    _cameraService.stopImageStream();
     Provider.of<TestProgress>(context, listen: false).markSmileCompleted();
     _audioService.speak('Smile test complete');
     Future.delayed(const Duration(seconds: 2), () {
@@ -260,12 +304,12 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
     );
   }
 
-Widget _buildTestScreen() {
+  Widget _buildTestScreen() {
     return SingleChildScrollView(
       padding: EdgeInsets.all(AppConstants.buttonSpacing),
       child: Column(
         children: [
-          // camera with flexible height
+          // Camera with face detection border
           if (_cameraInitialized && _cameraService.controller != null)
             LayoutBuilder(
               builder: (context, constraints) {
@@ -327,7 +371,7 @@ Widget _buildTestScreen() {
               ),
             ),
           
-          // Warning indicator when face not detected
+          // Face detection warnings
           if (!_isFaceDetected && _currentPhase != SmilePhase.complete)
             Container(
               margin: EdgeInsets.only(top: 16),
@@ -344,6 +388,21 @@ Widget _buildTestScreen() {
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
+              ),
+            ),
+          
+          // Debug: Show smile probability
+          if (_isFaceDetected && _cameraInitialized)
+            Container(
+              margin: EdgeInsets.only(top: 8),
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Smile: ${(_smileProbability * 100).toStringAsFixed(0)}%',
+                style: TextStyle(fontSize: 16, color: Colors.blue[900]),
               ),
             ),
         ],

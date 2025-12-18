@@ -9,6 +9,7 @@ import 'speech_test_screen.dart';
 import 'eye_tracking_screen.dart';
 import 'facial_expression_screen.dart';
 import 'gait_test_screen.dart';
+import '../services/service_locator.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,42 +19,16 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final AudioService _audioService = AudioService();
-  bool _initialized = false;
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  Future<void> _initializeAudio() async {
-    try {
-      await _audioService.initialize();
-      if (mounted) setState(() => _initialized = true);
-      await Future.delayed(Duration(milliseconds: AppConstants.audioInstructionDelay));
-      if (mounted) {
-        await _audioService.speak('Welcome to Real Vision. Please choose a test.');
-      }
-    } catch (e) {
-      print('Audio initialization error: $e');
-      if (mounted) setState(() => _initialized = true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _audioService.dispose();
-    super.dispose();
-  }
 
   Future<void> _navigateToTest(Widget screen, String testName) async {
-    // Initialize TTS only when user taps a button
-    if (!_initialized) {
-      await _audioService.initialize();
-      setState(() => _initialized = true);
+    // Get audio service only when needed
+    final audioService = getIt<AudioService>();
+    
+    if (!audioService.isInitialized) {
+      await audioService.initialize();
     }
   
-    await _audioService.speak('Starting $testName');
+    await audioService.speak('Starting $testName');
     await Future.delayed(Duration(milliseconds: 500));
   
     if (mounted) {
@@ -140,9 +115,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: ElevatedButton(
                             onPressed: progress.allTestsCompleted
                                 ? () {
-                                    if (_initialized) {
+                                    /* if (_initialized) {
                                       _audioService.speak('All tests completed');
-                                    }
+                                    } */
                                     _showResultsDialog(context, progress);
                                   }
                                 : null,
@@ -186,7 +161,6 @@ class _HomeScreenState extends State<HomeScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
-              // Don't reset - keep results
             },
             child: Text('Keep Results', style: TextStyle(fontSize: 20)),
           ),
@@ -194,9 +168,9 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {
               Navigator.of(dialogContext).pop();
               progress.resetProgress();
-              if (_initialized) {
+              /*if (_initialized) {
                 _audioService.speak('All tests have been reset. You may now redo them.');
-              }
+              } */
             },
             child: Text('Redo All Tests', style: TextStyle(fontSize: 20)),
           ),
