@@ -28,10 +28,22 @@ class AudioService {
         print('Speech recognition not available');
       }
       
+      // iOS-specific TTS configuration
       await _flutterTts.setLanguage('en-US');
       await _flutterTts.setSpeechRate(AppConstants.speechRate);
       await _flutterTts.setVolume(AppConstants.speechVolume);
       await _flutterTts.setPitch(AppConstants.speechPitch);
+      
+      // iOS-specific settings
+      await _flutterTts.setIosAudioCategory(
+        IosTextToSpeechAudioCategory.playback,
+        [
+          IosTextToSpeechAudioCategoryOptions.mixWithOthers,
+          IosTextToSpeechAudioCategoryOptions.duckOthers,
+        ],
+        IosTextToSpeechAudioMode.defaultMode,
+      );
+      
       _isInitialized = true;
     } catch (e) {
       print('Audio service initialization error: $e');
@@ -67,6 +79,7 @@ class AudioService {
     _isListening = true;
     _accumulatedTranscript = '';
     
+    // Start keep-alive mechanism
     _startKeepAlive(onResult, onError);
     
     try {
@@ -80,8 +93,8 @@ class AudioService {
           String currentTranscript = _accumulatedTranscript + ' ' + result.recognizedWords;
           onResult(currentTranscript.trim());
         },
-        listenFor: Duration(seconds: 120), // 2 minutes per session
-        pauseFor: Duration(seconds: 30), // allows pauses
+        listenFor: Duration(seconds: 120), // 2 minutes max per session
+        pauseFor: Duration(seconds: 30),   // Very long pause tolerance
         localeId: 'en_US',
         listenOptions: SpeechListenOptions(
           partialResults: true,
@@ -98,7 +111,7 @@ class AudioService {
   }
   
   void _startKeepAlive(Function(String) onResult, Function(String)? onError) {
-    // restart listening every 90 seconds to prevent timeout
+    // Restart listening every 90 seconds to prevent timeout
     _keepAliveTimer?.cancel();
     _keepAliveTimer = Timer.periodic(Duration(seconds: 90), (timer) async {
       if (!_isListening) {

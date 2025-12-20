@@ -28,6 +28,15 @@ class HealthService {
     final permissions = types.map((type) => HealthDataAccess.READ).toList();
     
     try {
+      // Platform-specific pre-check
+      if (Platform.isIOS) {
+        // iOS: HealthKit is always available, just request permissions
+        print('iOS: Requesting HealthKit permissions...');
+      } else if (Platform.isAndroid) {
+        // Android: Check if Health Connect is available
+        print('Android: Checking for Health Connect/Google Fit...');
+      }
+      
       // First check if permissions already exist
       bool? hasPermissions = await _health.hasPermissions(types, permissions: permissions);
       
@@ -45,19 +54,26 @@ class HealthService {
         attempts++;
         print('Requesting health permissions (attempt $attempts)...');
         
-        granted = await _health.requestAuthorization(
-          types,
-          permissions: permissions,
-        );
-        
-        if (granted == true) {
-          _permissionsGranted = true;
-          print('Health permissions granted on attempt $attempts');
-          return true;
+        try {
+          granted = await _health.requestAuthorization(
+            types,
+            permissions: permissions,
+          );
+          
+          if (granted == true) {
+            _permissionsGranted = true;
+            print('Health permissions granted on attempt $attempts');
+            return true;
+          }
+        } catch (e) {
+          print('Permission request error on attempt $attempts: $e');
+          if (attempts >= 3) {
+            throw e;
+          }
         }
         
         // Wait before retry
-        if (attempts < 3) {
+        if (attempts < 3 && !granted!) {
           await Future.delayed(Duration(seconds: 1));
         }
       }
@@ -103,16 +119,118 @@ class HealthService {
     }
     
     final types = _getSupportedTypes();
+    double durationMinutes = end.difference(start).inSeconds / 60.0;
+    
+    // iOS HealthKit doesn't update in real-time during the test
+    // Instead, query for the LAST 10 minutes to capture recent activity
+    if (Platform.isIOS) {
+      print('iOS: Querying last 10 minutes of activity...');
+      final recentStart = DateTime.now().subtract(Duration(minutes: 10));
+      final recentEnd = DateTime.now();
+      
+      try {
+        // Get steps from the last 10 minutes
+        int recentSteps = await _health.getTotalStepsInInterval(recentStart, recentEnd) ?? 0;
+        print('iOS: Found $recentSteps steps in last 10 minutes');
+        
+        if (recentSteps > 0) {
+          // Estimate steps during the actual test (proportional)
+          // If test was 2 mins and we got X steps in 10 mins, 
+          // estimate test steps as (X * 2/10)
+          int estimatedTestSteps = (recentSteps * (durationMinutes / 10)).round();
+          double cadence = durationMinutes > 0 ? estimatedTestSteps / durationMinutes : 0;
+          
+          return {
+            'steps': estimatedTestSteps,
+            'distance': 0.0,
+            'avgSpeed': 0.0,
+            'cadence': cadence,
+            'speedVariability': 0.0,
+            'durationMinutes': durationMinutes,
+            'platform': 'iOS',
+            'dataPoints': 1,
+            'message': 'Data collected successfully (estimated from recent activity)',
+            'note': 'iOS HealthKit updates with delay. Steps estimated from recent 10-min activity.',
+          };
+        } else {
+          return {
+            'steps': 0,
+            'distance': 0.0,
+            'avgSpeed': 0.0,
+            'cadence': 0.0,
+            'speedVariability': 0.0,
+            'durationMinutes': durationMinutes,
+            'platform': 'iOS',
+            'message': 'No recent walking activity detected. Make sure you walked during the test and Motion & Fitness tracking is enabled in Settings.',
+          };
+        }
+      } catch (e) {
+        print('iOS step query error: $e');
+        return {
+          'steps': 0,
+          'distance': 0.0,
+          'avgSpeed': 0.0,
+          'cadence': 0.0,
+          'speedVariability': 0.0,
+          'durationMinutes': durationMinutes,
+          'platform': 'iOS',
+          'error': e.toString(),
+          'message': 'Error accessing HealthKit. Make sure Motion & Fitness is enabled in Settings > Privacy.',
+        };
+      }
+    }
+    
+    // Android: Query during actual test window
+    final queryStart = start.subtract(Duration(minutes: 1));
+    final queryEnd = end.add(Duration(minutes: 1));
+    
+    print('Android: Querying health data from $queryStart to $queryEnd');
     
     try {
       // Fetch health data
       List<HealthDataPoint> healthData = await _health.getHealthDataFromTypes(
-        startTime: start,
-        endTime: end,
+        startTime: queryStart,
+        endTime: queryEnd,
         types: types,
       );
       
+      print('Retrieved ${healthData.length} health data points');
+      
+      // Filter data points to only include those within the actual test window
+      healthData = healthData.where((point) {
+        return point.dateFrom.isAfter(start) && point.dateTo.isBefore(end);
+      }).toList();
+      
+      print('After filtering: ${healthData.length} health data points');
+      
       if (healthData.isEmpty) {
+        // On iOS, try aggregated query
+        if (Platform.isIOS) {
+          try {
+            int aggregatedSteps = await _health.getTotalStepsInInterval(start, end) ?? 0;
+            print('iOS aggregated steps: $aggregatedSteps');
+            
+            if (aggregatedSteps > 0) {
+              double durationMinutes = end.difference(start).inSeconds / 60.0;
+              double cadence = durationMinutes > 0 ? aggregatedSteps / durationMinutes : 0;
+              
+              return {
+                'steps': aggregatedSteps,
+                'distance': 0.0,
+                'avgSpeed': 0.0,
+                'cadence': cadence,
+                'speedVariability': 0.0,
+                'durationMinutes': durationMinutes,
+                'platform': 'iOS',
+                'dataPoints': 1,
+                'message': 'Data collected successfully (aggregated)',
+              };
+            }
+          } catch (e) {
+            print('iOS aggregated query error: $e');
+          }
+        }
+        
         return {
           'steps': 0,
           'distance': 0.0,
@@ -120,7 +238,7 @@ class HealthService {
           'cadence': 0.0,
           'durationMinutes': 0.0,
           'platform': Platform.isAndroid ? 'Android' : 'iOS',
-          'message': 'No walking data detected. Make sure you walked during the test.',
+          'message': 'No walking data detected during test period. Make sure you walked during the test and that step counting is enabled.',
         };
       }
       

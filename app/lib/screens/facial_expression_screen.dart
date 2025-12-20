@@ -10,6 +10,7 @@ import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../widgets/breadcrumb.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 enum SmilePhase { none, neutral, smile, neutral2, complete }
 
@@ -305,106 +306,122 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   }
 
   Widget _buildTestScreen() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(AppConstants.buttonSpacing),
+    return Padding(
+      padding: EdgeInsets.all(16),
       child: Column(
         children: [
-          // Camera with face detection border
-          if (_cameraInitialized && _cameraService.controller != null)
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final maxHeight = MediaQuery.of(context).size.height - 400;
-                final aspectRatio = 3 / 4;
-                final calculatedHeight = constraints.maxWidth / aspectRatio * 4 / 3;
-                final height = calculatedHeight > maxHeight ? maxHeight : calculatedHeight;
-                
-                return Container(
-                  height: height,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: _isFaceDetected ? AppColors.success : Colors.red,
-                      width: 4,
+          // Camera takes most of the space
+          Expanded(
+            flex: 70, // percentage based
+            child: _cameraInitialized && _cameraService.controller != null
+                ? Center(
+                    child: AspectRatio(
+                      aspectRatio: _cameraService.controller!.value.aspectRatio,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: _isFaceDetected ? AppColors.success : Colors.red,
+                            width: 4,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: CameraPreview(_cameraService.controller!),
+                        ),
+                      ),
+                    ),
+                  )
+                : Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: CircularProgressIndicator(color: AppColors.primary),
                     ),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: CameraPreview(_cameraService.controller!),
-                  ),
-                );
-              },
-            )
-          else
-            Container(
-              height: 300,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
-            ),
-          
-          SizedBox(height: 24),
-          
-          Text(_getPhaseEmoji(), style: const TextStyle(fontSize: 50)),
-          SizedBox(height: 12),
-          
-          Text(
-            _getPhaseText(),
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textDark,
-            ),
-            textAlign: TextAlign.center,
           ),
           
-          SizedBox(height: 12),
+          SizedBox(height: 12), // Spacing between camera and instructions
           
-          if (_currentPhase != SmilePhase.complete)
-            Text(
-              '${_countdown}s',
-              style: TextStyle(
-                fontSize: 50,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
-              ),
-            ),
-          
-          // Face detection warnings
-          if (!_isFaceDetected && _currentPhase != SmilePhase.complete)
-            Container(
-              margin: EdgeInsets.only(top: 16),
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red, width: 2),
-              ),
-              child: Text(
-                '⚠️ Keep your face in frame',
-                style: TextStyle(
-                  color: Colors.red[700],
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+          // Instructions
+          Expanded(
+            flex: 30,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                // Emoji
+                Text(
+                  _getPhaseEmoji(),
+                  style: const TextStyle(fontSize: 36),
                 ),
-              ),
+                
+                // Phase text
+                Flexible(
+                  child: Text(
+                    _getPhaseText(),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textDark,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                
+                // Countdown
+                if (_currentPhase != SmilePhase.complete)
+                  Text(
+                    '${_countdown}s',
+                    style: TextStyle(
+                      fontSize: 38,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                
+                // Warning or debug info
+                if (!_isFaceDetected && _currentPhase != SmilePhase.complete)
+                  Flexible(
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.red[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red, width: 2),
+                      ),
+                      child: Text(
+                        '⚠️ Face in frame',
+                        style: TextStyle(
+                          color: Colors.red[700],
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  )
+                else if (kDebugMode && _isFaceDetected && _currentPhase != SmilePhase.complete)
+                  Flexible(
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Smile: ${(_smileProbability * 100).toStringAsFixed(0)}%',
+                        style: TextStyle(fontSize: 13, color: Colors.blue[900]),
+                      ),
+                    ),
+                  )
+                else
+                  SizedBox(height: 30), // Placeholder when no warning
+              ],
             ),
-          
-          // Debug: Show smile probability
-          if (_isFaceDetected && _cameraInitialized)
-            Container(
-              margin: EdgeInsets.only(top: 8),
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'Smile: ${(_smileProbability * 100).toStringAsFixed(0)}%',
-                style: TextStyle(fontSize: 16, color: Colors.blue[900]),
-              ),
-            ),
+          ),
         ],
       ),
     );

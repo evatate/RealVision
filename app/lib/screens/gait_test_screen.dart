@@ -7,6 +7,7 @@ import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../widgets/breadcrumb.dart';
 import 'dart:async';
+import 'dart:io' show Platform;
 
 class GaitTestScreen extends StatefulWidget {
   const GaitTestScreen({super.key});
@@ -187,9 +188,11 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
             border: Border.all(color: Colors.orange[300]!, width: 2),
           ),
           child: Text(
-            'Install Google Fit or Samsung Health for step tracking',
+            Platform.isIOS
+                ? 'iOS uses the built-in Health app for step tracking. Permissions will be requested when you start.'
+                : 'Install Google Fit or Samsung Health for step tracking. Permissions will be requested when you start.',
             style: TextStyle(
-              fontSize: 20, // Larger!
+              fontSize: 20,
               color: AppColors.textDark,
             ),
             textAlign: TextAlign.center,

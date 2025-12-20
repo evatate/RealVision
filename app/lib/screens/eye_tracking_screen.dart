@@ -94,7 +94,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
               child: Text(
                 'Starting with practice round...',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 20, 
                   fontStyle: FontStyle.italic,
                   color: Colors.blue[900],
                   fontWeight: FontWeight.w500,
@@ -171,7 +171,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         _audioService.speak('Practice complete. Starting test trials. Trial 1 of ${AppConstants.fixationTestTrials}');
         Future.delayed(const Duration(seconds: 2), _runFixationTrial);
       } else {
-        // All done
         _completeFixationTest();
       }
       return;

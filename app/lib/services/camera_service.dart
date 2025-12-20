@@ -4,7 +4,7 @@ class CameraService {
   CameraController? _controller;
   List<CameraDescription>? _cameras;
   
-  Future<void> initialize() async {
+    Future<void> initialize() async {
     _cameras = await availableCameras();
     if (_cameras!.isEmpty) {
       throw Exception('No cameras available');
@@ -16,14 +16,17 @@ class CameraService {
       orElse: () => _cameras!.first,
     );
     
-  _controller = CameraController(
-    frontCamera,
-    ResolutionPreset.medium, // Changed from 'high'
-    enableAudio: false,
-    imageFormatGroup: ImageFormatGroup.yuv420, // More efficient
-  );
+    _controller = CameraController(
+      frontCamera,
+      ResolutionPreset.medium,
+      enableAudio: false,
+      imageFormatGroup: ImageFormatGroup.yuv420,
+    );
     
     await _controller!.initialize();
+    
+    // Lock orientation for consistent aspect ratio
+    await _controller!.lockCaptureOrientation();
   }
   
   CameraController? get controller => _controller;

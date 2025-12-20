@@ -16,9 +16,9 @@ class AppConstants {
   static const int smoothPursuitPracticeTrials = 2;
   static const int smoothPursuitTestTrials = 6; // 12 for production
   
-  // TTS settings (VERY SLOW + LOUDER)
-  static const double speechRate = 0.4; // Even slower!
-  static const double speechVolume = 1.0; // Already max, phone will be louder
+  // TTS settings (verty slow and loud)
+  static const double speechRate = 0.5;
+  static const double speechVolume = 1.0;
   static const double speechPitch = 1.0;
   
   static const int audioInstructionDelay = 1500; // 1.5 second delay

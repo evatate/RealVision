@@ -91,16 +91,18 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       setState(() => _isListening = false);
     }
     
-    // Get final transcript
-    final finalTranscript = _audioService.getAccumulatedTranscript();
+    // Get final transcript, use the displayed one or accumulated
+    final finalTranscript = _transcript.isNotEmpty 
+        ? _transcript 
+        : _audioService.getAccumulatedTranscript();
     
-    if (finalTranscript.isEmpty) {
+    if (finalTranscript.trim().isEmpty || finalTranscript.trim().length < 10) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No speech detected. Please try again and speak clearly.'),
+            content: Text('No speech detected or recording too short. Please try again and speak clearly into the microphone.'),
             backgroundColor: Colors.red,
-            duration: Duration(seconds: 4),
+            duration: Duration(seconds: 5),
           ),
         );
       }
