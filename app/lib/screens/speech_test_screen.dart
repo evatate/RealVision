@@ -31,7 +31,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       await _audioService.initialize();
       setState(() => _initialized = true);
       
-      // Wait before speaking to avoid overlap
       await Future.delayed(const Duration(milliseconds: 1500));
       
       if (mounted && !_hasSpoken) {
@@ -71,47 +70,56 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
           }
         },
       );
-
-      // Auto-stop after 2 minutes
-      Future.delayed(Duration(seconds: AppConstants.speechTestDuration), () {
-        if (mounted && _isListening) {
-          _stopTest();
-        }
-      });
     } catch (e) {
       print('Error starting speech test: $e');
       if (mounted) {
         setState(() => _isListening = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start recording: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     }
   }
 
   Future<void> _stopTest() async {
     await _audioService.stopListening();
+    
     if (mounted) {
       setState(() => _isListening = false);
     }
     
-    if (_transcript.isNotEmpty) {
-      if (mounted) {
-        Provider.of<TestProgress>(context, listen: false).markSpeechCompleted();
-      }
-      await _audioService.speak('Thank you. Speech test complete.');
-      
-      print('Speech transcript: $_transcript');
-      
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) Navigator.pop(context);
-      });
-    } else {
+    // Get final transcript
+    final finalTranscript = _audioService.getAccumulatedTranscript();
+    
+    if (finalTranscript.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No speech detected. Please try again.'),
+            content: Text('No speech detected. Please try again and speak clearly.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
           ),
         );
       }
+      return;
     }
+    
+    // Mark as completed
+    if (mounted) {
+      Provider.of<TestProgress>(context, listen: false).markSpeechCompleted();
+    }
+    
+    await _audioService.speak('Thank you. Speech test complete.');
+    
+    print('Speech transcript: $finalTranscript');
+    print('Transcript length: ${finalTranscript.split(' ').length} words');
+    
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) Navigator.pop(context);
+    });
   }
 
   @override
@@ -133,7 +141,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                 padding: EdgeInsets.all(AppConstants.buttonSpacing),
                 child: Column(
                   children: [
-                    // Image only
                     Container(
                       decoration: BoxDecoration(
                         color: AppColors.cardBackground,
@@ -206,11 +213,20 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                           ),
                           SizedBox(height: 12),
                           Text(
-                            'Recording...',
+                            'Recording... Speak freely',
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
                               color: AppColors.textDark,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Takes pauses and silences',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: AppColors.textMedium,
+                              fontStyle: FontStyle.italic,
                             ),
                           ),
                           SizedBox(height: 16),
@@ -224,15 +240,22 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                               border: Border.all(color: AppColors.border, width: 2),
                             ),
                             constraints: const BoxConstraints(
-                              minHeight: 80,
-                              maxHeight: 150,
+                              minHeight: 100,
+                              maxHeight: 200,
                             ),
                             child: SingleChildScrollView(
                               child: Text(
-                                _transcript.isEmpty ? 'Speak now...' : _transcript,
+                                _transcript.isEmpty 
+                                    ? 'Your speech will appear here...' 
+                                    : _transcript,
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: AppColors.textDark,
+                                  color: _transcript.isEmpty 
+                                      ? AppColors.textMedium 
+                                      : AppColors.textDark,
+                                  fontStyle: _transcript.isEmpty 
+                                      ? FontStyle.italic 
+                                      : FontStyle.normal,
                                 ),
                               ),
                             ),

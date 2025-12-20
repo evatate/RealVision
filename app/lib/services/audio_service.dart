@@ -1,14 +1,15 @@
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../utils/constants.dart';
+import 'dart:async';
 
 class AudioService {
   final SpeechToText _speechToText = SpeechToText();
   final FlutterTts _flutterTts = FlutterTts();
   bool _isListening = false;
   bool _isInitialized = false;
-  Function(String)? _currentOnResult;
-  Function(String)? _currentOnError;
+  String _accumulatedTranscript = '';
+  Timer? _keepAliveTimer;
   
   Future<void> initialize() async {
     if (_isInitialized) return;
@@ -17,26 +18,9 @@ class AudioService {
       bool available = await _speechToText.initialize(
         onError: (error) {
           print('Speech init error: $error');
-          // Auto-restart on "no match" error
-          if (error.errorMsg == 'error_no_match' && _isListening) {
-            print('No match detected, restarting...');
-            Future.delayed(Duration(milliseconds: 500), () {
-              if (_isListening && _currentOnResult != null) {
-                _restartListening(_currentOnResult!, _currentOnError);
-              }
-            });
-          }
         },
         onStatus: (status) {
           print('Speech status: $status');
-          // Auto-restart when recognition stops
-          if (status == 'done' && _isListening) {
-            Future.delayed(Duration(milliseconds: 500), () {
-              if (_isListening && _currentOnResult != null) {
-                _restartListening(_currentOnResult!, _currentOnError);
-              }
-            });
-          }
         },
       );
       
@@ -80,24 +64,24 @@ class AudioService {
       return;
     }
     
-    // Store callbacks for auto-restart
-    _currentOnResult = onResult;
-    _currentOnError = onError;
+    _isListening = true;
+    _accumulatedTranscript = '';
     
-    if (_isListening) {
-      await stopListening();
-      await Future.delayed(Duration(milliseconds: 500));
-    }
+    _startKeepAlive(onResult, onError);
     
     try {
-      _isListening = true;
-      
       await _speechToText.listen(
         onResult: (result) {
-          onResult(result.recognizedWords);
+          // Accumulate transcript
+          if (result.finalResult) {
+            _accumulatedTranscript += ' ' + result.recognizedWords;
+          }
+          // Always send back accumulated + current partial
+          String currentTranscript = _accumulatedTranscript + ' ' + result.recognizedWords;
+          onResult(currentTranscript.trim());
         },
-        listenFor: Duration(seconds: 60), // Long timeout
-        pauseFor: Duration(seconds: 10),  // Long pause before stopping
+        listenFor: Duration(seconds: 120), // 2 minutes per session
+        pauseFor: Duration(seconds: 30), // allows pauses
         localeId: 'en_US',
         listenOptions: SpeechListenOptions(
           partialResults: true,
@@ -108,62 +92,75 @@ class AudioService {
     } catch (e) {
       print('Listen error: $e');
       _isListening = false;
+      _keepAliveTimer?.cancel();
       onError?.call(e.toString());
     }
   }
   
-  Future<void> _restartListening(
-    Function(String) onResult,
-    Function(String)? onError,
-  ) async {
-    if (!_isListening) return;
-    
-    print('Restarting speech recognition...');
-    
-    try {
-      if (_speechToText.isListening) {
-        await _speechToText.stop();
-        await Future.delayed(Duration(milliseconds: 300));
+  void _startKeepAlive(Function(String) onResult, Function(String)? onError) {
+    // restart listening every 90 seconds to prevent timeout
+    _keepAliveTimer?.cancel();
+    _keepAliveTimer = Timer.periodic(Duration(seconds: 90), (timer) async {
+      if (!_isListening) {
+        timer.cancel();
+        return;
       }
       
-      if (!_isListening) return;
+      print('Keep-alive: Restarting speech recognition...');
       
-      await _speechToText.listen(
-        onResult: (result) {
-          onResult(result.recognizedWords);
-        },
-        listenFor: Duration(seconds: 60),
-        pauseFor: Duration(seconds: 10),
-        localeId: 'en_US',
-        listenOptions: SpeechListenOptions(
-          partialResults: true,
-          onDevice: false,
-          listenMode: ListenMode.confirmation,
-        ),
-      );
-    } catch (e) {
-      print('Restart listen error: $e');
-      onError?.call(e.toString());
-    }
+      try {
+        // Stop current session
+        if (_speechToText.isListening) {
+          await _speechToText.stop();
+        }
+        
+        // Small delay
+        await Future.delayed(Duration(milliseconds: 200));
+        
+        if (!_isListening) return;
+        
+        // Restart
+        await _speechToText.listen(
+          onResult: (result) {
+            if (result.finalResult) {
+              _accumulatedTranscript += ' ' + result.recognizedWords;
+            }
+            String currentTranscript = _accumulatedTranscript + ' ' + result.recognizedWords;
+            onResult(currentTranscript.trim());
+          },
+          listenFor: Duration(seconds: 120),
+          pauseFor: Duration(seconds: 30),
+          localeId: 'en_US',
+          listenOptions: SpeechListenOptions(
+            partialResults: true,
+            onDevice: false,
+            listenMode: ListenMode.confirmation,
+          ),
+        );
+      } catch (e) {
+        print('Keep-alive restart error: $e');
+        onError?.call(e.toString());
+      }
+    });
   }
   
   Future<void> stopListening() async {
     _isListening = false;
-    _currentOnResult = null;
-    _currentOnError = null;
+    _keepAliveTimer?.cancel();
     
     if (_speechToText.isListening) {
       await _speechToText.stop();
     }
   }
   
+  String getAccumulatedTranscript() => _accumulatedTranscript.trim();
+  
   bool get isListening => _isListening;
   bool get isInitialized => _isInitialized;
   
   void dispose() {
     _isListening = false;
-    _currentOnResult = null;
-    _currentOnError = null;
+    _keepAliveTimer?.cancel();
     _speechToText.cancel();
     _flutterTts.stop();
   }
