@@ -130,7 +130,6 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
         _repetitionCount = 0;
       });
       
-      // Start face detection
       _startFaceDetection();
       
       await _audioService.speak('Practice round. Keep neutral face');
@@ -143,13 +142,12 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   void _startFaceDetection() async {
     try {
       await _cameraService.startImageStream((CameraImage image) async {
-        // Process every 500ms to avoid overload
         if (_faceDetectionTimer?.isActive ?? false) return;
         
         _faceDetectionTimer = Timer(Duration(milliseconds: 500), () async {
           final result = await _faceDetector.detectFace(
             image,
-            InputImageRotation.rotation0deg, // Adjust based on camera orientation
+            InputImageRotation.rotation0deg,
           );
           
           if (mounted) {
@@ -310,9 +308,9 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
       padding: EdgeInsets.all(16),
       child: Column(
         children: [
-          // Camera takes most of the space
+          // Camera - 65% of space
           Expanded(
-            flex: 70, // percentage based
+            flex: 65,
             child: _cameraInitialized && _cameraService.controller != null
                 ? Center(
                     child: AspectRatio(
@@ -343,33 +341,29 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
                   ),
           ),
           
-          SizedBox(height: 12), // Spacing between camera and instructions
+          SizedBox(height: 16),
           
-          // Instructions
+          // Instructions panel - 35% of space, evenly distributed
           Expanded(
-            flex: 30,
+            flex: 35,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 // Emoji
                 Text(
                   _getPhaseEmoji(),
-                  style: const TextStyle(fontSize: 36),
+                  style: const TextStyle(fontSize: 40),
                 ),
                 
                 // Phase text
-                Flexible(
-                  child: Text(
-                    _getPhaseText(),
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textDark,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                Text(
+                  _getPhaseText(),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textDark,
                   ),
+                  textAlign: TextAlign.center,
                 ),
                 
                 // Countdown
@@ -377,7 +371,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
                   Text(
                     '${_countdown}s',
                     style: TextStyle(
-                      fontSize: 38,
+                      fontSize: 48,
                       fontWeight: FontWeight.bold,
                       color: AppColors.primary,
                     ),
@@ -385,40 +379,36 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
                 
                 // Warning or debug info
                 if (!_isFaceDetected && _currentPhase != SmilePhase.complete)
-                  Flexible(
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.red[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red, width: 2),
-                      ),
-                      child: Text(
-                        '⚠️ Face in frame',
-                        style: TextStyle(
-                          color: Colors.red[700],
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red, width: 2),
+                    ),
+                    child: Text(
+                      '⚠️ Face NOT in frame',
+                      style: TextStyle(
+                        color: Colors.red[700],
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   )
                 else if (kDebugMode && _isFaceDetected && _currentPhase != SmilePhase.complete)
-                  Flexible(
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'Smile: ${(_smileProbability * 100).toStringAsFixed(0)}%',
-                        style: TextStyle(fontSize: 13, color: Colors.blue[900]),
-                      ),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Smile: ${(_smileProbability * 100).toStringAsFixed(0)}%',
+                      style: TextStyle(fontSize: 14, color: Colors.blue[900]),
                     ),
                   )
                 else
-                  SizedBox(height: 30), // Placeholder when no warning
+                  SizedBox(height: 32),
               ],
             ),
           ),

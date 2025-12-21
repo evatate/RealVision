@@ -5,6 +5,7 @@ import 'package:camera/camera.dart';
 import '../models/test_progress.dart';
 import '../services/camera_service.dart';
 import '../services/audio_service.dart';
+import '../services/eye_tracking_service.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../widgets/breadcrumb.dart';
@@ -24,6 +25,7 @@ class EyeTrackingScreen extends StatefulWidget {
 class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   late CameraService _cameraService = CameraService();
   late AudioService _audioService = AudioService();
+  late EyeTrackingService _eyeTrackingService = EyeTrackingService();
   
   EyeTrackingTask _currentTask = EyeTrackingTask.none;
   int _trialNumber = 0;
@@ -32,6 +34,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   Timer? _taskTimer;
   bool _cameraInitialized = false;
   bool _showTarget = true;
+  Timer? _eyeTrackingTimer;
 
   @override
   void initState() {
@@ -53,8 +56,11 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   @override
   void dispose() {
     _taskTimer?.cancel();
+    _eyeTrackingTimer?.cancel();
+    _cameraService.stopImageStream();
     _cameraService.dispose();
     _audioService.dispose();
+    _eyeTrackingService.dispose();
     super.dispose();
   }
 
@@ -147,6 +153,9 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             _targetPosition = const Offset(0.5, 0.5);
           });
           
+          // Start eye tracking
+          _startEyeTracking();
+          
           await _audioService.speak('Practice trial. Look at the red cross.');
           _runFixationTrial();
         } catch (e) {
@@ -156,6 +165,31 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     );
   }
 
+  void _startEyeTracking() async {
+    try {
+      await _cameraService.startImageStream((CameraImage image) async {
+        if (_eyeTrackingTimer?.isActive ?? false) return;
+        
+        _eyeTrackingTimer = Timer(Duration(milliseconds: 100), () async {
+          if (_targetPosition == null) return;
+          
+          final result = await _eyeTrackingService.trackGaze(
+            image,
+            _targetPosition!,
+            MediaQuery.of(context).size,
+          );
+          
+          if (result != null && mounted) {
+            // Store gaze data for later analysis
+            _eyeTrackingService.recordGazePoint(result);
+          }
+        });
+      });
+    } catch (e) {
+      print('Error starting eye tracking: $e');
+    }
+  }
+
   void _runFixationTrial() {
     final maxTrials = _isPractice 
         ? AppConstants.fixationPracticeTrials 
@@ -163,7 +197,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     
     if (_trialNumber >= maxTrials) {
       if (_isPractice) {
-        // Practice done, start real trials
         setState(() {
           _isPractice = false;
           _trialNumber = 0;
@@ -185,12 +218,16 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         _audioService.speak('${label.capitalize()} trial ${_trialNumber + 1}');
         Future.delayed(const Duration(seconds: 2), _runFixationTrial);
       } else {
-        _runFixationTrial(); // Will trigger next phase or completion
+        _runFixationTrial();
       }
     });
   }
 
   void _completeFixationTest() {
+    // Get fixation metrics
+    final metrics = _eyeTrackingService.getFixationMetrics();
+    print('Fixation metrics: $metrics');
+    
     Provider.of<TestProgress>(context, listen: false).markFixationCompleted();
     _audioService.speak('Fixation test complete');
     if (mounted) {
@@ -199,7 +236,9 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         _trialNumber = 0;
       });
     }
+    _cameraService.stopImageStream();
     _cameraService.dispose();
+    _eyeTrackingService.clearData();
   }
 
   Future<void> _startProsaccadeTest() async {
@@ -217,6 +256,8 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             _trialNumber = 0;
             _cameraInitialized = true;
           });
+          
+          _startEyeTracking();
           
           await _audioService.speak('Practice trials. Look at targets quickly.');
           _runProsaccadeTrial();
@@ -241,6 +282,9 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         _audioService.speak('Practice complete. Starting test trials.');
         Future.delayed(const Duration(seconds: 2), _runProsaccadeTrial);
       } else {
+        final metrics = _eyeTrackingService.getProsaccadeMetrics();
+        print('Pro-saccade metrics: $metrics');
+        
         Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
         _audioService.speak('Pro-saccade test complete');
         if (mounted) {
@@ -249,7 +293,9 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             _trialNumber = 0;
           });
         }
+        _cameraService.stopImageStream();
         _cameraService.dispose();
+        _eyeTrackingService.clearData();
       }
       return;
     }
@@ -300,6 +346,8 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             _cameraInitialized = true;
           });
           
+          _startEyeTracking();
+          
           await _audioService.speak('Practice trials. Follow the red circle.');
           _runPursuitTrial();
         } catch (e) {
@@ -323,6 +371,9 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         _audioService.speak('Practice complete. Starting test trials.');
         Future.delayed(const Duration(seconds: 2), _runPursuitTrial);
       } else {
+        final metrics = _eyeTrackingService.getSmoothPursuitMetrics();
+        print('Smooth pursuit metrics: $metrics');
+        
         Provider.of<TestProgress>(context, listen: false).markPursuitCompleted();
         _audioService.speak('Smooth pursuit test complete');
         if (mounted) {
@@ -331,7 +382,9 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             _trialNumber = 0;
           });
         }
+        _cameraService.stopImageStream();
         _cameraService.dispose();
+        _eyeTrackingService.clearData();
       }
       return;
     }
@@ -435,27 +488,24 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   }
 
   Widget _buildTaskScreen() {
+    final screenSize = MediaQuery.of(context).size;
+    
     return Stack(
       children: [
-        Container(color: Colors.black),
-        
-        Center(
-          child: _showTarget && _targetPosition != null
-              ? FractionallySizedBox(
-                  widthFactor: 1.0,
-                  heightFactor: 1.0,
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        left: MediaQuery.of(context).size.width * _targetPosition!.dx - 40,
-                        top: MediaQuery.of(context).size.height * _targetPosition!.dy - 40,
-                        child: _buildTarget(),
-                      ),
-                    ],
-                  ),
-                )
-              : const SizedBox.shrink(),
+        // Full black background
+        Container(
+          width: screenSize.width,
+          height: screenSize.height,
+          color: Colors.black,
         ),
+        
+        // Target positioned absolutely
+        if (_showTarget && _targetPosition != null)
+          Positioned(
+            left: screenSize.width * _targetPosition!.dx - 40,
+            top: screenSize.height * _targetPosition!.dy - 40,
+            child: _buildTarget(),
+          ),
         
         // Camera preview (only in debug mode)
         if (kDebugMode && _cameraInitialized && _cameraService.controller != null)
@@ -476,6 +526,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             ),
           ),
         
+        // Trial counter
         Positioned(
           bottom: 32,
           left: 0,
