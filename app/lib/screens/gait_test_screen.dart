@@ -24,6 +24,8 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
   int _countdown = 0;
   Timer? _countdownTimer;
   DateTime? _startTime;
+  DateTime? _endTime;
+  bool _waitingForSync = false;
 
   @override
   void initState() {
@@ -46,7 +48,9 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Please install Google Fit and grant permissions',
+              Platform.isIOS 
+                ? 'Please enable Motion & Fitness in Settings > Privacy & Security'
+                : 'Please install Google Fit and grant permissions',
               style: TextStyle(fontSize: 18),
             ),
             duration: Duration(seconds: 4),
@@ -91,28 +95,42 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
   Future<void> _completeTest() async {
     if (_startTime == null) return;
 
-    final endTime = DateTime.now();
+    _endTime = DateTime.now();
     
-    try {
-      final gaitData = await _healthService.getGaitData(
-        start: _startTime!,
-        end: endTime,
-      );
-      
-      print('Gait data collected: $gaitData');
-    } catch (e) {
-      print('Error getting gait data: $e');
-    }
-
-    if (!mounted) return;
+    setState(() {
+      _isRecording = false;
+      _waitingForSync = true;
+    });
     
-    setState(() => _isRecording = false);
-    
+    // Mark as completed immediately so user can continue
     Provider.of<TestProgress>(context, listen: false).markGaitCompleted();
-    await _audioService.speak('Walking test complete');
+    await _audioService.speak('Walking test complete. Step data will sync in background.');
     
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) Navigator.pop(context);
+    // Return to home screen
+    if (mounted) {
+      Navigator.pop(context);
+    }
+    
+    // Query data after 2 minutes in background
+    Future.delayed(const Duration(minutes: 2), () async {
+      if (_startTime == null || _endTime == null) return;
+      
+      try {
+        final gaitData = await _healthService.getGaitData(
+          start: _startTime!,
+          end: _endTime!,
+        );
+        
+        print('==== WALKING TEST RESULTS (queried 2 min later) ====');
+        print('Steps: ${gaitData['steps']}');
+        print('Duration: ${gaitData['durationMinutes']} min');
+        print('Distance: ${gaitData['distance']} m');
+        print('Avg Speed: ${gaitData['avgSpeed']} m/s');
+        print('Message: ${gaitData['message']}');
+        print('===================================================');
+      } catch (e) {
+        print('Error getting delayed gait data: $e');
+      }
     });
   }
 
@@ -149,7 +167,6 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
         ),
         SizedBox(height: 32),
         
-        // Main instruction as header
         Text(
           'Please walk normally for 2 minutes',
           style: TextStyle(
@@ -172,30 +189,36 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
             ),
             child: Text(
               'Start Walking Test',
-              style: TextStyle(fontSize: 24),
+              style: TextStyle(fontSize: 24, color: Colors.white),
             ),
           ),
         ),
         
         SizedBox(height: 32),
         
-        // Larger install instructions
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.orange[50],
+            color: Colors.blue[50],
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange[300]!, width: 2),
+            border: Border.all(color: Colors.blue[300]!, width: 2),
           ),
-          child: Text(
-            Platform.isIOS
-                ? 'iOS uses the built-in Health app for step tracking. Permissions will be requested when you start.'
-                : 'Install Google Fit or Samsung Health for step tracking. Permissions will be requested when you start.',
-            style: TextStyle(
-              fontSize: 20,
-              color: AppColors.textDark,
-            ),
-            textAlign: TextAlign.center,
+          child: Column(
+            children: [
+              Icon(Icons.info_outline, color: Colors.blue[900], size: 32),
+              SizedBox(height: 12),
+              Text(
+                Platform.isIOS
+                    ? 'Make sure Motion & Fitness is enabled:\nSettings > Privacy & Security > Motion & Fitness'
+                    : 'Install Google Fit or Samsung Health\nfor step tracking',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: AppColors.textDark,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
         ),
       ],

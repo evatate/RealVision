@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../utils/colors.dart';
-import '../utils/constants.dart';
 
 class TestButton extends StatelessWidget {
   final IconData icon;
@@ -23,43 +22,69 @@ class TestButton extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(12),
+        color: completed ? Colors.green[50] : AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: completed ? AppColors.success : AppColors.border,
-          width: 3,
+          color: completed ? Colors.green[400]! : AppColors.border,
+          width: 2,
         ),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Icon(
-                  icon,
-                  size: 48,
-                  color: AppColors.primary,
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: completed ? Colors.green[100] : AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 36,
+                    color: completed ? Colors.green[700] : AppColors.primary,
+                  ),
                 ),
-                SizedBox(width: 20),
+                const SizedBox(width: 16),
                 Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: AppConstants.testTitleFontSize,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textDark,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        description,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: AppColors.textMedium,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 if (completed)
                   Icon(
                     Icons.check_circle,
-                    size: 40,
-                    color: AppColors.success,
+                    color: Colors.green[700],
+                    size: 32,
+                  )
+                else
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    color: AppColors.textMedium,
+                    size: 24,
                   ),
               ],
             ),

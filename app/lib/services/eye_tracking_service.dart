@@ -67,40 +67,79 @@ class EyeTrackingService {
       
       final face = faces.first;
       
-      // Get eye landmarks
+      // Get key landmarks
       final leftEye = face.landmarks[FaceLandmarkType.leftEye];
       final rightEye = face.landmarks[FaceLandmarkType.rightEye];
+      final noseBase = face.landmarks[FaceLandmarkType.noseBase];
+      final leftMouth = face.landmarks[FaceLandmarkType.leftMouth];
+      final rightMouth = face.landmarks[FaceLandmarkType.rightMouth];
       
-      if (leftEye == null || rightEye == null) return null;
+      if (leftEye == null || rightEye == null || noseBase == null) return null;
       
-      // Calculate average eye position (gaze point estimation)
+      // Calculate face center and size
+      final faceBox = face.boundingBox;
+      final faceCenter = Offset(
+        faceBox.left + faceBox.width / 2,
+        faceBox.top + faceBox.height / 2,
+      );
+      
+      // Calculate eye center
       final eyeCenter = Offset(
         (leftEye.position.x + rightEye.position.x) / 2.0,
         (leftEye.position.y + rightEye.position.y) / 2.0,
       );
       
-      // Normalize to screen coordinates (0-1 range)
-      final normalizedEye = Offset(
-        eyeCenter.dx / image.width.toDouble(),
-        eyeCenter.dy / image.height.toDouble(),
-      );
+      // Get head pose angles
+      final headPitch = face.headEulerAngleX ?? 0.0; // Up/down tilt
+      final headYaw = face.headEulerAngleY ?? 0.0;   // Left/right turn
+      final headRoll = face.headEulerAngleZ ?? 0.0;  // Tilt
+      
+      // CRITICAL FIX: Map camera frame to screen coordinates
+      // Camera is in portrait but might be rotated
+      // Image dimensions are in camera's native orientation
+      var screenX = eyeCenter.dx / image.width.toDouble();
+      var screenY = eyeCenter.dy / image.height.toDouble();
+      
+      // Apply head pose corrections
+      // When camera is at top of screen and user looks at center:
+      // - Head tilts DOWN (negative pitch ~-5° to -15°)
+      // - This makes eyes appear LOWER in frame
+      // - We need to SHIFT gaze UP on screen to compensate
+      
+      // Pitch correction: -1° pitch = looking ~10 pixels down on a 375pt iPhone screen
+      // That's about 0.027 in normalized coords per degree
+      final pitchCorrection = headPitch * -0.025; // Negative because pitch is inverted
+      screenY += pitchCorrection;
+      
+      // Yaw correction: turning head left/right
+      final yawCorrection = headYaw * 0.015;
+      screenX -= yawCorrection;
+      
+      // Additional correction based on where eyes are in the face
+      // If eyes are in lower part of face box, user is looking down
+      final eyePositionInFace = (eyeCenter.dy - faceBox.top) / faceBox.height;
+      if (eyePositionInFace > 0.4) {
+        // Eyes are lower in face -> looking down -> shift gaze up
+        screenY -= (eyePositionInFace - 0.4) * 0.1;
+      }
+      
+      // Clamp to valid range
+      screenX = screenX.clamp(0.0, 1.0);
+      screenY = screenY.clamp(0.0, 1.0);
+      
+      final normalizedGaze = Offset(screenX, screenY);
       
       // Calculate distance from gaze to target
-      final distance = _calculateDistance(normalizedEye, targetPosition);
-      
-      // Get head pose angles
-      final headEulerAngleX = face.headEulerAngleX ?? 0.0;
-      final headEulerAngleY = face.headEulerAngleY ?? 0.0;
-      final headEulerAngleZ = face.headEulerAngleZ ?? 0.0;
+      final distance = _calculateDistance(normalizedGaze, targetPosition);
       
       final gazePoint = GazePoint(
-        eyePosition: normalizedEye,
+        eyePosition: normalizedGaze,
         targetPosition: targetPosition,
         timestamp: DateTime.now(),
         distance: distance,
-        headPoseX: headEulerAngleX,
-        headPoseY: headEulerAngleY,
-        headPoseZ: headEulerAngleZ,
+        headPoseX: headPitch,
+        headPoseY: headYaw,
+        headPoseZ: headRoll,
       );
       
       return gazePoint;
@@ -136,6 +175,17 @@ class EyeTrackingService {
       };
     }
     
+    // Debug: print sample data
+    if (_gazeData.length > 10) {
+      print('Sample gaze data (first 5 points):');
+      for (int i = 0; i < math.min(5, _gazeData.length); i++) {
+        print('  Eye: (${_gazeData[i].eyePosition.dx.toStringAsFixed(3)}, ${_gazeData[i].eyePosition.dy.toStringAsFixed(3)}), '
+              'Target: (${_gazeData[i].targetPosition.dx.toStringAsFixed(3)}, ${_gazeData[i].targetPosition.dy.toStringAsFixed(3)}), '
+              'Distance: ${_gazeData[i].distance.toStringAsFixed(3)}, '
+              'Head Pitch: ${_gazeData[i].headPoseX.toStringAsFixed(1)}°');
+      }
+    }
+    
     // Large intrusive saccades (>2° visual angle, approx 0.035 in normalized coords)
     int largeIntrusiveSaccades = 0;
     for (int i = 1; i < _gazeData.length; i++) {
@@ -160,7 +210,6 @@ class EyeTrackingService {
         _gazeData[i - 1].eyePosition,
       );
       
-      // Check if it's a small saccade away then back
       if (move1 > 0.01 && move1 < 0.035 && move2 > 0.01 && move2 < 0.035) {
         final timeDiff = _gazeData[i].timestamp.difference(_gazeData[i - 1].timestamp).inMilliseconds;
         if (timeDiff < 300) {
@@ -169,10 +218,10 @@ class EyeTrackingService {
       }
     }
     
-    // Maximum fixation duration (longest continuous period near target)
+    // Maximum fixation duration
     double maxFixationDuration = 0.0;
     double currentFixationDuration = 0.0;
-    const fixationThreshold = 0.025; // About 1.5° visual angle
+    const fixationThreshold = 0.05; // Increased threshold for better tolerance
     
     for (int i = 1; i < _gazeData.length; i++) {
       if (_gazeData[i].distance < fixationThreshold) {
@@ -184,6 +233,11 @@ class EyeTrackingService {
         }
         currentFixationDuration = 0.0;
       }
+    }
+    
+    // Check final fixation
+    if (currentFixationDuration > maxFixationDuration) {
+      maxFixationDuration = currentFixationDuration;
     }
     
     // Mean and std of distance from target
@@ -212,13 +266,12 @@ class EyeTrackingService {
       };
     }
     
-    // Group data by trials (assuming target changes indicate new trials)
+    // Group data by trials (target changes indicate new trials)
     final trials = <List<GazePoint>>[];
     List<GazePoint> currentTrial = [_gazeData[0]];
     
     for (int i = 1; i < _gazeData.length; i++) {
       if (_calculateDistance(_gazeData[i].targetPosition, _gazeData[i - 1].targetPosition) > 0.1) {
-        // Target changed, new trial
         trials.add(currentTrial);
         currentTrial = [_gazeData[i]];
       } else {
@@ -227,21 +280,22 @@ class EyeTrackingService {
     }
     trials.add(currentTrial);
     
-    // Calculate metrics per trial
     int successfulTrials = 0;
     double totalLatency = 0.0;
     double totalSaccades = 0.0;
     
+    const double TARGET_THRESHOLD = 0.10; // More relaxed - within 10% of screen
+    
     for (final trial in trials) {
       if (trial.isEmpty) continue;
       
-      // Check if target was reached (within 1.5° visual angle)
-      final reachedTarget = trial.any((p) => p.distance < 0.025);
+      // Check if target was reached
+      final reachedTarget = trial.any((p) => p.distance < TARGET_THRESHOLD);
       if (reachedTarget) {
         successfulTrials++;
         
         // Find time to reach target
-        final firstReach = trial.firstWhere((p) => p.distance < 0.025);
+        final firstReach = trial.firstWhere((p) => p.distance < TARGET_THRESHOLD);
         final latency = firstReach.timestamp.difference(trial.first.timestamp).inMilliseconds;
         totalLatency += latency;
         
@@ -249,7 +303,7 @@ class EyeTrackingService {
         int saccades = 0;
         for (int i = 1; i < trial.length; i++) {
           final movement = _calculateDistance(trial[i].eyePosition, trial[i - 1].eyePosition);
-          if (movement > 0.015) {
+          if (movement > 0.02) { // More relaxed saccade threshold
             saccades++;
           }
         }
@@ -260,6 +314,8 @@ class EyeTrackingService {
     final accuracy = successfulTrials / trials.length;
     final meanLatency = successfulTrials > 0 ? totalLatency / successfulTrials : 0.0;
     final meanSaccades = successfulTrials > 0 ? totalSaccades / successfulTrials : 0.0;
+    
+    print('Pro-saccade debug: $successfulTrials successful out of ${trials.length} trials');
     
     return {
       'accuracy': accuracy,

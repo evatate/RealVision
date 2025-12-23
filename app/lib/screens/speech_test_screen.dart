@@ -91,7 +91,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       setState(() => _isListening = false);
     }
     
-    // Get final transcript, use the displayed one or accumulated
     final finalTranscript = _transcript.isNotEmpty 
         ? _transcript 
         : _audioService.getAccumulatedTranscript();
@@ -109,7 +108,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       return;
     }
     
-    // Mark as completed
     if (mounted) {
       Provider.of<TestProgress>(context, listen: false).markSpeechCompleted();
     }
@@ -126,8 +124,12 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
 
   @override
   void dispose() {
-    _audioService.dispose();
+    _audioService.stopListening();
     super.dispose();
+    // Dispose audio service after a delay to let final TTS complete
+    Future.delayed(const Duration(seconds: 3), () {
+      _audioService.dispose();
+    });
   }
 
   @override
@@ -152,10 +154,10 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                       padding: const EdgeInsets.all(12),
                       child: Image.asset(
                         'assets/images/cookie_theft.png',
-                        height: 180,
+                        height: 240,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
-                            height: 180,
+                            height: 240,
                             color: Colors.grey[300],
                             child: Center(
                               child: Text(
@@ -215,20 +217,11 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                           ),
                           SizedBox(height: 12),
                           Text(
-                            'Recording... Speak freely',
+                            'Recording...',
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
                               color: AppColors.textDark,
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Takes pauses and silences',
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: AppColors.textMedium,
-                              fontStyle: FontStyle.italic,
                             ),
                           ),
                           SizedBox(height: 16),

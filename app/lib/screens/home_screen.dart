@@ -21,7 +21,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _navigateToTest(Widget screen, String testName) async {
-    // Get audio service only when needed
     final audioService = getIt<AudioService>();
     
     if (!audioService.isInitialized) {
@@ -45,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
-          padding: EdgeInsets.all(AppConstants.buttonSpacing),
+          padding: EdgeInsets.symmetric(horizontal: AppConstants.buttonSpacing, vertical: 20),
           child: Column(
             children: [
               Text(
@@ -56,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: AppColors.textDark,
                 ),
               ),
-              SizedBox(height: 12),
+              SizedBox(height: 20),
               
               Expanded(
                 child: Consumer<TestProgress>(
@@ -64,6 +63,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     return Column(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
+                        TestButton(
+                          icon: Icons.directions_walk,
+                          title: 'Walking Test',
+                          description: 'Step tracking (do first)',
+                          completed: progress.gaitCompleted,
+                          onPressed: () => _navigateToTest(
+                            const GaitTestScreen(),
+                            'walking test',
+                          ),
+                        ),
+                        
                         TestButton(
                           icon: Icons.mic,
                           title: 'Speech Test',
@@ -97,17 +107,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         
-                        TestButton(
-                          icon: Icons.directions_walk,
-                          title: 'Walking Test',
-                          description: 'Step tracking',
-                          completed: progress.gaitCompleted,
-                          onPressed: () => _navigateToTest(
-                            const GaitTestScreen(),
-                            'walking test',
-                          ),
-                        ),
-                        
                         SizedBox(height: 8),
                         
                         SizedBox(
@@ -115,20 +114,17 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: ElevatedButton(
                             onPressed: progress.allTestsCompleted
                                 ? () {
-                                    /* if (_initialized) {
-                                      _audioService.speak('All tests completed');
-                                    } */
                                     _showResultsDialog(context, progress);
                                   }
                                 : null,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.success,
                               disabledBackgroundColor: AppColors.border,
-                              padding: EdgeInsets.all(20),
+                              padding: EdgeInsets.all(18),
                             ),
                             child: Text(
                               'View Results',
-                              style: TextStyle(fontSize: 24),
+                              style: TextStyle(fontSize: 22, color: Colors.white),
                             ),
                           ),
                         ),
@@ -168,9 +164,6 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {
               Navigator.of(dialogContext).pop();
               progress.resetProgress();
-              /*if (_initialized) {
-                _audioService.speak('All tests have been reset. You may now redo them.');
-              } */
             },
             child: Text('Redo All Tests', style: TextStyle(fontSize: 20)),
           ),

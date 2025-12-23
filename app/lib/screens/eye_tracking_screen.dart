@@ -35,6 +35,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   bool _cameraInitialized = false;
   bool _showTarget = true;
   Timer? _eyeTrackingTimer;
+  bool _isFaceDetected = false;
 
   @override
   void initState() {
@@ -153,7 +154,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             _targetPosition = const Offset(0.5, 0.5);
           });
           
-          // Start eye tracking
           _startEyeTracking();
           
           await _audioService.speak('Practice trial. Look at the red cross.');
@@ -180,8 +180,10 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
           );
           
           if (result != null && mounted) {
-            // Store gaze data for later analysis
+            setState(() => _isFaceDetected = true);
             _eyeTrackingService.recordGazePoint(result);
+          } else if (mounted) {
+            setState(() => _isFaceDetected = false);
           }
         });
       });
@@ -224,21 +226,52 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   }
 
   void _completeFixationTest() {
-    // Get fixation metrics
     final metrics = _eyeTrackingService.getFixationMetrics();
     print('Fixation metrics: $metrics');
     
-    Provider.of<TestProgress>(context, listen: false).markFixationCompleted();
-    _audioService.speak('Fixation test complete');
-    if (mounted) {
-      setState(() {
-        _currentTask = EyeTrackingTask.none;
-        _trialNumber = 0;
-      });
-    }
     _cameraService.stopImageStream();
-    _cameraService.dispose();
     _eyeTrackingService.clearData();
+    
+    _audioService.speak('Fixation test complete');
+    
+    _showCompletionDialog('Fixation Test Complete', 'Moving to Pro-saccade test...', () {
+      Provider.of<TestProgress>(context, listen: false).markFixationCompleted();
+      _startProsaccadeTest();
+    });
+  }
+
+  void _showCompletionDialog(String title, String message, VoidCallback onNext) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 32),
+            SizedBox(height: 8),
+            Text(title, style: TextStyle(fontSize: 22), textAlign: TextAlign.center),
+          ],
+        ),
+        content: Text(message, style: TextStyle(fontSize: 18), textAlign: TextAlign.center),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                onNext();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: EdgeInsets.all(16),
+              ),
+              child: Text('Continue', style: TextStyle(fontSize: 20, color: Colors.white)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _startProsaccadeTest() async {
@@ -285,17 +318,15 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         final metrics = _eyeTrackingService.getProsaccadeMetrics();
         print('Pro-saccade metrics: $metrics');
         
-        Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
-        _audioService.speak('Pro-saccade test complete');
-        if (mounted) {
-          setState(() {
-            _currentTask = EyeTrackingTask.none;
-            _trialNumber = 0;
-          });
-        }
         _cameraService.stopImageStream();
-        _cameraService.dispose();
         _eyeTrackingService.clearData();
+        
+        _audioService.speak('Pro-saccade test complete');
+        
+        _showCompletionDialog('Pro-saccade Test Complete', 'Moving to Smooth Pursuit test...', () {
+          Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
+          _startSmoothPursuitTest();
+        });
       }
       return;
     }
@@ -374,17 +405,23 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         final metrics = _eyeTrackingService.getSmoothPursuitMetrics();
         print('Smooth pursuit metrics: $metrics');
         
+        _cameraService.stopImageStream();
+        _cameraService.dispose();
+        _eyeTrackingService.clearData();
+        
         Provider.of<TestProgress>(context, listen: false).markPursuitCompleted();
-        _audioService.speak('Smooth pursuit test complete');
+        _audioService.speak('Smooth pursuit test complete. All eye tracking tests finished!');
+        
         if (mounted) {
           setState(() {
             _currentTask = EyeTrackingTask.none;
             _trialNumber = 0;
           });
         }
-        _cameraService.stopImageStream();
-        _cameraService.dispose();
-        _eyeTrackingService.clearData();
+        
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) Navigator.pop(context);
+        });
       }
       return;
     }
@@ -392,28 +429,38 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     final isHorizontal = _trialNumber % 2 == 0;
     final speed = _trialNumber % 4 < 2 ? 10 : 20;
     final frequency = speed == 10 ? 0.25 : 0.5;
-    final startTime = DateTime.now();
-
-    Timer.periodic(const Duration(milliseconds: 16), (timer) {
-      if (!mounted || _currentTask != EyeTrackingTask.pursuit) {
-        timer.cancel();
-        return;
-      }
-
-      final elapsed = DateTime.now().difference(startTime).inMilliseconds / 1000;
+    
+    setState(() {
+      _targetPosition = const Offset(0.5, 0.5);
+      _showTarget = true;
+    });
+    
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!mounted || _currentTask != EyeTrackingTask.pursuit) return;
       
-      if (elapsed > 10) {
-        timer.cancel();
-        setState(() => _trialNumber++);
-        Future.delayed(const Duration(seconds: 1), _runPursuitTrial);
-        return;
-      }
+      final startTime = DateTime.now();
+      
+      Timer.periodic(const Duration(milliseconds: 16), (timer) {
+        if (!mounted || _currentTask != EyeTrackingTask.pursuit) {
+          timer.cancel();
+          return;
+        }
 
-      final position = 0.5 + 0.2 * sin(2 * pi * frequency * elapsed);
-      setState(() {
-        _targetPosition = isHorizontal
-            ? Offset(position, 0.5)
-            : Offset(0.5, position);
+        final elapsed = DateTime.now().difference(startTime).inMilliseconds / 1000;
+        
+        if (elapsed > 10) {
+          timer.cancel();
+          setState(() => _trialNumber++);
+          Future.delayed(const Duration(seconds: 1), _runPursuitTrial);
+          return;
+        }
+
+        final position = 0.5 + 0.2 * sin(2 * pi * frequency * elapsed);
+        setState(() {
+          _targetPosition = isHorizontal
+              ? Offset(position, 0.5)
+              : Offset(0.5, position);
+        });
       });
     });
   }
@@ -421,24 +468,23 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            if (_currentTask == EyeTrackingTask.none)
-              const Breadcrumb(current: 'Eye Tracking'),
-            Expanded(
-              child: _currentTask == EyeTrackingTask.none
-                  ? _buildTaskSelection()
-                  : _buildTaskScreen(),
-            ),
-          ],
-        ),
-      ),
+      backgroundColor: _currentTask == EyeTrackingTask.none ? AppColors.background : Colors.black,
+      body: _currentTask == EyeTrackingTask.none
+          ? SafeArea(
+              child: Column(
+                children: [
+                  const Breadcrumb(current: 'Eye Tracking'),
+                  Expanded(child: _buildTaskSelection()),
+                ],
+              ),
+            )
+          : _buildTaskScreen(),
     );
   }
 
   Widget _buildTaskSelection() {
+    final progress = Provider.of<TestProgress>(context);
+    
     return SingleChildScrollView(
       padding: EdgeInsets.all(AppConstants.buttonSpacing),
       child: Column(
@@ -451,63 +497,115 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
               color: AppColors.textDark,
             ),
           ),
+          SizedBox(height: 16),
+          
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue[300]!, width: 2),
+            ),
+            child: Text(
+              'Complete all 3 tests for full assessment',
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.blue[900],
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          
           SizedBox(height: AppConstants.buttonSpacing * 2),
           
-          _buildTaskButton('Fixation Stability Test', _startFixationTest),
+          _buildTaskButtonWithStatus(
+            'Fixation Stability Test', 
+            _startFixationTest,
+            progress.fixationCompleted,
+          ),
           SizedBox(height: AppConstants.buttonSpacing),
           
-          _buildTaskButton('Pro-saccade Test', _startProsaccadeTest),
+          _buildTaskButtonWithStatus(
+            'Pro-saccade Test', 
+            _startProsaccadeTest,
+            progress.prosaccadeCompleted,
+          ),
           SizedBox(height: AppConstants.buttonSpacing),
           
-          _buildTaskButton('Smooth Pursuit Test', _startSmoothPursuitTest),
+          _buildTaskButtonWithStatus(
+            'Smooth Pursuit Test', 
+            _startSmoothPursuitTest,
+            progress.pursuitCompleted,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildTaskButton(String title, VoidCallback onPressed) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          padding: EdgeInsets.all(AppConstants.buttonPadding),
+  Widget _buildTaskButtonWithStatus(String title, VoidCallback onPressed, bool completed) {
+    return Container(
+      decoration: BoxDecoration(
+        color: completed ? Colors.green[50] : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: completed ? Colors.green[400]! : AppColors.border,
+          width: 2,
         ),
-        child: Text(
-          title,
-          style: TextStyle(
-            fontSize: AppConstants.testTitleFontSize,
-            fontWeight: FontWeight.bold,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: EdgeInsets.all(AppConstants.buttonPadding),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                ),
+                if (completed)
+                  Icon(
+                    Icons.check_circle,
+                    color: Colors.green[700],
+                    size: 32,
+                  )
+                else
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    color: AppColors.textMedium,
+                    size: 24,
+                  ),
+              ],
+            ),
           ),
-          textAlign: TextAlign.center,
         ),
       ),
     );
   }
 
   Widget _buildTaskScreen() {
-    final screenSize = MediaQuery.of(context).size;
+    final size = MediaQuery.of(context).size;
     
     return Stack(
       children: [
-        // Full black background
-        Container(
-          width: screenSize.width,
-          height: screenSize.height,
-          color: Colors.black,
-        ),
+        Container(color: Colors.black),
         
-        // Target positioned absolutely
         if (_showTarget && _targetPosition != null)
           Positioned(
-            left: screenSize.width * _targetPosition!.dx - 40,
-            top: screenSize.height * _targetPosition!.dy - 40,
+            left: size.width * _targetPosition!.dx - 40,
+            top: size.height * _targetPosition!.dy - 40,
             child: _buildTarget(),
           ),
         
-        // Camera preview (only in debug mode)
         if (kDebugMode && _cameraInitialized && _cameraService.controller != null)
           Positioned(
             top: 16,
@@ -526,7 +624,31 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             ),
           ),
         
-        // Trial counter
+        if (!_isFaceDetected)
+          Positioned(
+            top: 100,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: Text(
+                  '⚠️ Face NOT detected',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        
         Positioned(
           bottom: 32,
           left: 0,
