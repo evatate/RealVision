@@ -194,7 +194,7 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
             ),
           ),
           
-          SizedBox(height: 20),
+          SizedBox(height: 32),
           
           Container(
             padding: const EdgeInsets.all(14),
@@ -210,19 +210,19 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
                 Text(
                   'Install Google Fit',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 20,
                     color: AppColors.textDark,
                     fontWeight: FontWeight.bold,
                   ),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: 6),
+                SizedBox(height: 8),
                 Text(
                   Platform.isIOS
-                      ? 'After installing:\n1. Open Google Fit\n2. Grant Motion & Fitness permissions\n3. Return to this app'
-                      : 'After installing:\n1. Open Google Fit\n2. Complete setup\n3. Grant permissions\n4. Return here',
+                      ? '1. Open Google Fit\n2. Grant Motion & Fitness permissions\n3. Return to this app'
+                      : '1. Open Google Fit\n2. Complete setup\n3. Grant permissions\n4. Return here',
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 18,
                     color: AppColors.textDark,
                   ),
                   textAlign: TextAlign.center,
@@ -230,26 +230,24 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
                 SizedBox(height: 10),
                 ElevatedButton.icon(
                   onPressed: () async {
-                    // Use itms-apps:// scheme for iOS to open App Store directly
+                    // for iOS open App Store directly
                     final url = Platform.isIOS
-                        ? 'itms-apps://apps.apple.com/app/id1423857595'
+                        ? 'https://apps.apple.com/us/app/google-fit-activity-tracker/id1433864494'
                         : 'https://play.google.com/store/apps/details?id=com.google.android.apps.fitness';
                     
                     final uri = Uri.parse(url);
-                    try {
-                      await launchUrl(uri, mode: LaunchMode.externalApplication);
-                    } catch (e) {
-                      // Fallback to web URL for iOS
-                      if (Platform.isIOS) {
-                        final webUrl = Uri.parse('https://apps.apple.com/us/app/google-fit/id1423857595');
-                        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
-                      } else {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Could not open app store')),
-                          );
-                        }
-                      }
+
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                    } else {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Could not open app store')),
+                        );
+                      } 
                     }
                   },
                   icon: Icon(Icons.download, color: Colors.white, size: 18),
