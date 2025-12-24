@@ -329,8 +329,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
         
         _audioService.speak('Pro-saccade test complete');
-        
-        // Return to test selection instead of auto-transitioning
+
         Future.delayed(const Duration(seconds: 3), () {
           if (mounted) {
             setState(() {
@@ -425,8 +424,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         // Speak completion message
         _audioService.speak('Smooth pursuit test complete. All eye tracking tests finished!');
         
-        // Wait longer before navigating to ensure audio completes
-        Future.delayed(const Duration(seconds: 5), () {
+        Future.delayed(const Duration(seconds: 8), () {
           if (mounted) {
             setState(() {
               _currentTask = EyeTrackingTask.none;

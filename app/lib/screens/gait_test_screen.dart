@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/test_progress.dart';
 import '../services/health_service.dart';
 import '../services/audio_service.dart';
@@ -161,22 +162,22 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
           
           Icon(
             Icons.directions_walk,
-            size: 80,
+            size: 70,
             color: AppColors.primary,
           ),
-          SizedBox(height: 24),
+          SizedBox(height: 20),
           
           Text(
             'Please walk normally for 2 minutes',
             style: TextStyle(
-              fontSize: 26,
+              fontSize: 24,
               fontWeight: FontWeight.bold,
               color: AppColors.textDark,
             ),
             textAlign: TextAlign.center,
           ),
           
-          SizedBox(height: 32),
+          SizedBox(height: 28),
           
           SizedBox(
             width: double.infinity,
@@ -184,7 +185,7 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
               onPressed: _startTest,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
-                padding: EdgeInsets.all(20),
+                padding: EdgeInsets.all(18),
               ),
               child: Text(
                 'Start Walking Test',
@@ -193,10 +194,10 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
             ),
           ),
           
-          SizedBox(height: 24),
+          SizedBox(height: 20),
           
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: Colors.green[50],
               borderRadius: BorderRadius.circular(12),
@@ -204,12 +205,10 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
             ),
             child: Column(
               children: [
-                Icon(Icons.system_update, color: Colors.green[900], size: 28),
-                SizedBox(height: 10),
+                Icon(Icons.info_outline, color: Colors.green[900], size: 26),
+                SizedBox(height: 8),
                 Text(
-                  Platform.isIOS
-                      ? 'For Best Results: Install Google Fit'
-                      : 'Requires Google Fit',
+                  'Install Google Fit',
                   style: TextStyle(
                     fontSize: 18,
                     color: AppColors.textDark,
@@ -217,30 +216,54 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
                   ),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: 8),
+                SizedBox(height: 6),
                 Text(
                   Platform.isIOS
-                      ? 'Google Fit provides faster and more accurate step tracking than Apple Health.\n\nDownload from App Store before starting.'
-                      : 'Install Google Fit from the Play Store for step tracking.',
+                      ? 'After installing:\n1. Open Google Fit\n2. Grant Motion & Fitness permissions\n3. Return to this app'
+                      : 'After installing:\n1. Open Google Fit\n2. Complete setup\n3. Grant permissions\n4. Return here',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     color: AppColors.textDark,
                   ),
                   textAlign: TextAlign.center,
                 ),
                 SizedBox(height: 10),
-                TextButton.icon(
-                  onPressed: () {
-                    print('Open app store link');
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    // Use itms-apps:// scheme for iOS to open App Store directly
+                    final url = Platform.isIOS
+                        ? 'itms-apps://apps.apple.com/app/id1423857595'
+                        : 'https://play.google.com/store/apps/details?id=com.google.android.apps.fitness';
+                    
+                    final uri = Uri.parse(url);
+                    try {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    } catch (e) {
+                      // Fallback to web URL for iOS
+                      if (Platform.isIOS) {
+                        final webUrl = Uri.parse('https://apps.apple.com/us/app/google-fit/id1423857595');
+                        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+                      } else {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Could not open app store')),
+                          );
+                        }
+                      }
+                    }
                   },
-                  icon: Icon(Icons.download, color: Colors.green[700]),
+                  icon: Icon(Icons.download, color: Colors.white, size: 18),
                   label: Text(
                     'Get Google Fit',
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.green[700],
+                      fontSize: 15,
+                      color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[700],
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                   ),
                 ),
               ],

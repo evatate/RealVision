@@ -52,50 +52,47 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(24),
+        child: Padding(
+          padding: EdgeInsets.all(20),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              SizedBox(height: 40),
-              
-              // App Logo/Icon
+              SizedBox(height: 20),
               Container(
-                width: 120,
-                height: 120,
+                width: 80, 
+                height: 80,
                 decoration: BoxDecoration(
                   color: AppColors.primary,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   Icons.remove_red_eye,
-                  size: 60,
+                  size: 40,
                   color: Colors.white,
                 ),
               ),
               
-              SizedBox(height: 24),
+              SizedBox(height: 16), 
               
               Text(
                 'RealVision',
                 style: TextStyle(
-                  fontSize: 48,
+                  fontSize: 40, 
                   fontWeight: FontWeight.bold,
                   color: AppColors.textDark,
                 ),
               ),
               
-              SizedBox(height: 8),
+              SizedBox(height: 6),
               
               Text(
                 'Cognitive Assessment Tool',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 18,
                   color: AppColors.textMedium,
                 ),
               ),
               
-              SizedBox(height: 48),
+              SizedBox(height: 24),
               
               if (_isLoading)
                 Column(
@@ -115,24 +112,24 @@ class _SplashScreenState extends State<SplashScreen> {
                   ],
                 ),
               
-              // Remove the "Ready" status section entirely
-              SizedBox(height: 48),
+              SizedBox(height: 12),
               
               // Instructions
               Container(
-                padding: EdgeInsets.all(24),
+                padding: EdgeInsets.all(16), 
                 decoration: BoxDecoration(
                   color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.blue[300]!, width: 2),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       'Test Instructions',
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 28,
                         fontWeight: FontWeight.bold,
                         color: AppColors.textDark,
                       ),
@@ -140,16 +137,16 @@ class _SplashScreenState extends State<SplashScreen> {
                     SizedBox(height: 16),
                     _buildInstruction('1', 'Complete all 4 tests'),
                     SizedBox(height: 12),
-                    _buildInstruction('2', 'Start with Walking Test for best results'),
+                    _buildInstruction('2', 'Start with Walking Test'),
                     SizedBox(height: 12),
                     _buildInstruction('3', 'Find a quiet, well-lit space'),
                     SizedBox(height: 12),
-                    _buildInstruction('4', 'Follow audio instructions carefully'),
+                    _buildInstruction('4', 'Follow audio instructions'),
                   ],
                 ),
               ),
               
-              SizedBox(height: 24),
+              SizedBox(height: 48),
               
               if (!_isLoading)
                 SizedBox(
@@ -158,7 +155,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     onPressed: _navigateToHome,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      padding: EdgeInsets.all(20),
+                      padding: EdgeInsets.all(16), 
                     ),
                     child: Text(
                       'Start Assessment',
@@ -171,8 +168,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   ),
                 ),
               
-              // Add extra space under the button
-              SizedBox(height: 40),
+              SizedBox(height: 12), 
             ],
           ),
         ),
@@ -185,8 +181,8 @@ class _SplashScreenState extends State<SplashScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 28,
-          height: 28,
+          width: 32,
+          height: 32,
           decoration: BoxDecoration(
             color: AppColors.primary,
             shape: BoxShape.circle,
@@ -197,19 +193,19 @@ class _SplashScreenState extends State<SplashScreen> {
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
-                fontSize: 14,
+                fontSize: 24, 
               ),
             ),
           ),
         ),
-        SizedBox(width: 10),
+        SizedBox(width: 12),
         Expanded(
           child: Padding(
-            padding: EdgeInsets.only(top: 4),
+            padding: EdgeInsets.only(top: 6),
             child: Text(
               text,
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 24,
                 color: AppColors.textDark,
               ),
             ),
