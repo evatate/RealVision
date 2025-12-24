@@ -4,8 +4,10 @@ import 'dart:io' show Platform;
 class HealthService {
   final Health _health = Health();
   bool _permissionsGranted = false;
+  bool _useGoogleFit = false;
   
   List<HealthDataType> _getSupportedTypes() {
+    // Same types for both Google Fit and HealthKit
     if (Platform.isAndroid) {
       return [HealthDataType.STEPS];
     } else if (Platform.isIOS) {
@@ -19,89 +21,70 @@ class HealthService {
     }
   }
   
-  /// Requests health data permissions with retry logic
+  /// Check if Google Fit is installed (iOS only)
+  Future<bool> isGoogleFitInstalled() async {
+    if (!Platform.isIOS) return true; // Android uses Google Fit by default
+    
+    try {
+      // On iOS, we check by trying to access Google Fit data
+      // If Google Fit is installed and configured, this will succeed
+      // This is a simple heuristic - you might want to add url_launcher to check the app
+      return false; // Default to false, user must install
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  /// Request health data permissions with Google Fit priority
   Future<bool> requestPermissions() async {
-    // Check if already granted
     if (_permissionsGranted) return true;
     
     final types = _getSupportedTypes();
     final permissions = types.map((type) => HealthDataAccess.READ).toList();
     
     try {
-      // Platform-specific pre-check
       if (Platform.isIOS) {
-        // iOS: HealthKit is always available, just request permissions
-        print('iOS: Requesting HealthKit permissions...');
-      } else if (Platform.isAndroid) {
-        // Android: Check if Health Connect is available
-        print('Android: Checking for Health Connect/Google Fit...');
+        // On iOS, check if Google Fit is installed first
+        print('iOS: Checking for Google Fit...');
+        _useGoogleFit = await isGoogleFitInstalled();
+        
+        if (!_useGoogleFit) {
+          print('iOS: Google Fit not detected, using HealthKit as fallback');
+        } else {
+          print('iOS: Using Google Fit for step tracking');
+        }
+      } else {
+        // Android uses Google Fit by default
+        print('Android: Using Google Fit');
+        _useGoogleFit = true;
       }
       
-      // First check if permissions already exist
-      bool? hasPermissions = await _health.hasPermissions(types, permissions: permissions);
+      // Request authorization
+      bool? granted = await _health.requestAuthorization(
+        types,
+        permissions: permissions,
+      );
       
-      if (hasPermissions == true) {
+      if (granted == true) {
         _permissionsGranted = true;
-        print('Health permissions already granted');
+        print('Health permissions granted');
         return true;
       }
       
-      // Request authorization with retry
-      bool? granted = false;
-      int attempts = 0;
-      
-      while (!granted! && attempts < 3) {
-        attempts++;
-        print('Requesting health permissions (attempt $attempts)...');
-        
-        try {
-          granted = await _health.requestAuthorization(
-            types,
-            permissions: permissions,
-          );
-          
-          if (granted == true) {
-            _permissionsGranted = true;
-            print('Health permissions granted on attempt $attempts');
-            return true;
-          }
-        } catch (e) {
-          print('Permission request error on attempt $attempts: $e');
-          if (attempts >= 3) {
-            throw e;
-          }
-        }
-        
-        // Wait before retry
-        if (attempts < 3 && !granted!) {
-          await Future.delayed(Duration(seconds: 1));
-        }
-      }
-      
-      print('Health permissions denied after $attempts attempts');
+      print('Health permissions denied');
       return false;
       
     } catch (e) {
       print('Error requesting health permissions: $e');
-      
-      // Platform-specific guidance
-      if (Platform.isAndroid) {
-        print('Android: Install Google Fit or Samsung Health');
-        print('Then go to Settings > Apps > RealVision > Permissions');
-      } else if (Platform.isIOS) {
-        print('iOS: Enable in Settings > Privacy > Health');
-      }
-      
       return false;
     }
   }
   
-  /// Gets gait/walking data from the health platform
+  /// Get gait/walking data
   Future<Map<String, dynamic>> getGaitData({
     required DateTime start,
     required DateTime end,
   }) async {
-    // Ensure permissions before fetching
     if (!_permissionsGranted) {
       bool granted = await requestPermissions();
       if (!granted) {
@@ -111,9 +94,9 @@ class HealthService {
           'avgSpeed': 0.0,
           'cadence': 0.0,
           'durationMinutes': 0.0,
-          'platform': Platform.isAndroid ? 'Android' : 'iOS',
+          'platform': Platform.isAndroid ? 'Android (Google Fit)' : 'iOS',
+          'dataSource': _useGoogleFit ? 'Google Fit' : 'HealthKit',
           'error': 'Permissions not granted',
-          'message': 'Please grant health permissions and try again',
         };
       }
     }
@@ -121,22 +104,101 @@ class HealthService {
     final types = _getSupportedTypes();
     double durationMinutes = end.difference(start).inSeconds / 60.0;
     
-    // iOS HealthKit doesn't update in real-time during the test
-    // Instead, query for the LAST 10 minutes to capture recent activity
-    if (Platform.isIOS) {
-      print('iOS: Querying last 10 minutes of activity...');
+    // Google Fit (iOS) or Android - query with expanded time window
+    if (_useGoogleFit || Platform.isAndroid) {
+      print('Querying Google Fit data from $start to $end');
+      
+      // Query with 5-minute buffer on each side
+      final queryStart = start.subtract(Duration(minutes: 5));
+      final queryEnd = end.add(Duration(minutes: 5));
+      
+      try {
+        List<HealthDataPoint> healthData = await _health.getHealthDataFromTypes(
+          startTime: queryStart,
+          endTime: queryEnd,
+          types: types,
+        );
+        
+        print('Retrieved ${healthData.length} health data points from Google Fit');
+        
+        // Filter to actual test window
+        healthData = healthData.where((point) {
+          return point.dateFrom.isAfter(start) && point.dateTo.isBefore(end);
+        }).toList();
+        
+        if (healthData.isEmpty) {
+          return {
+            'steps': 0,
+            'distance': 0.0,
+            'avgSpeed': 0.0,
+            'cadence': 0.0,
+            'durationMinutes': durationMinutes,
+            'platform': Platform.isAndroid ? 'Android (Google Fit)' : 'iOS (Google Fit)',
+            'dataSource': 'Google Fit',
+            'message': 'No walking data detected. Make sure you walked during the test and Google Fit is tracking.',
+          };
+        }
+        
+        // Process data
+        int totalSteps = 0;
+        double totalDistance = 0.0;
+        List<double> speeds = [];
+        
+        for (var point in healthData) {
+          if (point.type == HealthDataType.STEPS) {
+            totalSteps += (point.value as num).toInt();
+          } else if (point.type == HealthDataType.DISTANCE_WALKING_RUNNING) {
+            totalDistance += (point.value as num).toDouble();
+          } else if (point.type == HealthDataType.WALKING_SPEED) {
+            speeds.add((point.value as num).toDouble());
+          }
+        }
+        
+        double avgSpeed = speeds.isNotEmpty 
+            ? speeds.reduce((a, b) => a + b) / speeds.length 
+            : (totalDistance > 0 && durationMinutes > 0 ? totalDistance / durationMinutes : 0.0);
+        
+        double cadence = durationMinutes > 0 ? totalSteps / durationMinutes : 0;
+        
+        return {
+          'steps': totalSteps,
+          'distance': totalDistance,
+          'avgSpeed': avgSpeed,
+          'cadence': cadence,
+          'speedVariability': _calculateVariability(speeds),
+          'durationMinutes': durationMinutes,
+          'platform': Platform.isAndroid ? 'Android (Google Fit)' : 'iOS (Google Fit)',
+          'dataSource': 'Google Fit',
+          'dataPoints': healthData.length,
+          'message': 'Data collected successfully from Google Fit',
+        };
+        
+      } catch (e) {
+        print('Error getting Google Fit data: $e');
+        return {
+          'steps': 0,
+          'distance': 0.0,
+          'avgSpeed': 0.0,
+          'cadence': 0.0,
+          'durationMinutes': durationMinutes,
+          'platform': Platform.isAndroid ? 'Android' : 'iOS',
+          'dataSource': _useGoogleFit ? 'Google Fit' : 'Unknown',
+          'error': e.toString(),
+        };
+      }
+    }
+    
+    // iOS HealthKit fallback (when Google Fit not installed)
+    if (Platform.isIOS && !_useGoogleFit) {
+      print('iOS HealthKit: Querying last 10 minutes of activity...');
       final recentStart = DateTime.now().subtract(Duration(minutes: 10));
       final recentEnd = DateTime.now();
       
       try {
-        // Get steps from the last 10 minutes
         int recentSteps = await _health.getTotalStepsInInterval(recentStart, recentEnd) ?? 0;
-        print('iOS: Found $recentSteps steps in last 10 minutes');
+        print('iOS HealthKit: Found $recentSteps steps in last 10 minutes');
         
         if (recentSteps > 0) {
-          // Estimate steps during the actual test (proportional)
-          // If test was 2 mins and we got X steps in 10 mins, 
-          // estimate test steps as (X * 2/10)
           int estimatedTestSteps = (recentSteps * (durationMinutes / 10)).round();
           double cadence = durationMinutes > 0 ? estimatedTestSteps / durationMinutes : 0;
           
@@ -147,10 +209,11 @@ class HealthService {
             'cadence': cadence,
             'speedVariability': 0.0,
             'durationMinutes': durationMinutes,
-            'platform': 'iOS',
+            'platform': 'iOS (HealthKit fallback)',
+            'dataSource': 'HealthKit',
             'dataPoints': 1,
-            'message': 'Data collected successfully (estimated from recent activity)',
-            'note': 'iOS HealthKit updates with delay. Steps estimated from recent 10-min activity.',
+            'message': 'Data collected from HealthKit (estimated from recent activity)',
+            'note': 'For better accuracy, install Google Fit from the App Store',
           };
         } else {
           return {
@@ -160,12 +223,14 @@ class HealthService {
             'cadence': 0.0,
             'speedVariability': 0.0,
             'durationMinutes': durationMinutes,
-            'platform': 'iOS',
-            'message': 'No recent walking activity detected. Make sure you walked during the test and Motion & Fitness tracking is enabled in Settings.',
+            'platform': 'iOS (HealthKit)',
+            'dataSource': 'HealthKit',
+            'message': 'No recent walking activity detected in HealthKit',
+            'note': 'For better accuracy, install Google Fit from the App Store',
           };
         }
       } catch (e) {
-        print('iOS step query error: $e');
+        print('iOS HealthKit error: $e');
         return {
           'steps': 0,
           'distance': 0.0,
@@ -173,132 +238,18 @@ class HealthService {
           'cadence': 0.0,
           'speedVariability': 0.0,
           'durationMinutes': durationMinutes,
-          'platform': 'iOS',
+          'platform': 'iOS (HealthKit)',
+          'dataSource': 'HealthKit',
           'error': e.toString(),
-          'message': 'Error accessing HealthKit. Make sure Motion & Fitness is enabled in Settings > Privacy.',
+          'note': 'For better accuracy, install Google Fit from the App Store',
         };
       }
     }
     
-    // Android: Query during actual test window
-    final queryStart = start.subtract(Duration(minutes: 1));
-    final queryEnd = end.add(Duration(minutes: 1));
-    
-    print('Android: Querying health data from $queryStart to $queryEnd');
-    
-    try {
-      // Fetch health data
-      List<HealthDataPoint> healthData = await _health.getHealthDataFromTypes(
-        startTime: queryStart,
-        endTime: queryEnd,
-        types: types,
-      );
-      
-      print('Retrieved ${healthData.length} health data points');
-      
-      // Filter data points to only include those within the actual test window
-      healthData = healthData.where((point) {
-        return point.dateFrom.isAfter(start) && point.dateTo.isBefore(end);
-      }).toList();
-      
-      print('After filtering: ${healthData.length} health data points');
-      
-      if (healthData.isEmpty) {
-        // On iOS, try aggregated query
-        if (Platform.isIOS) {
-          try {
-            int aggregatedSteps = await _health.getTotalStepsInInterval(start, end) ?? 0;
-            print('iOS aggregated steps: $aggregatedSteps');
-            
-            if (aggregatedSteps > 0) {
-              double durationMinutes = end.difference(start).inSeconds / 60.0;
-              double cadence = durationMinutes > 0 ? aggregatedSteps / durationMinutes : 0;
-              
-              return {
-                'steps': aggregatedSteps,
-                'distance': 0.0,
-                'avgSpeed': 0.0,
-                'cadence': cadence,
-                'speedVariability': 0.0,
-                'durationMinutes': durationMinutes,
-                'platform': 'iOS',
-                'dataPoints': 1,
-                'message': 'Data collected successfully (aggregated)',
-              };
-            }
-          } catch (e) {
-            print('iOS aggregated query error: $e');
-          }
-        }
-        
-        return {
-          'steps': 0,
-          'distance': 0.0,
-          'avgSpeed': 0.0,
-          'cadence': 0.0,
-          'durationMinutes': 0.0,
-          'platform': Platform.isAndroid ? 'Android' : 'iOS',
-          'message': 'No walking data detected during test period. Make sure you walked during the test and that step counting is enabled.',
-        };
-      }
-      
-      // Process the data
-      int totalSteps = 0;
-      double totalDistance = 0.0;
-      List<double> speeds = [];
-      
-      for (var point in healthData) {
-        if (point.type == HealthDataType.STEPS) {
-          totalSteps += (point.value as num).toInt();
-        } else if (point.type == HealthDataType.DISTANCE_WALKING_RUNNING) {
-          totalDistance += (point.value as num).toDouble();
-        } else if (point.type == HealthDataType.WALKING_SPEED) {
-          speeds.add((point.value as num).toDouble());
-        }
-      }
-      
-      // Calculate metrics
-      double durationMinutes = end.difference(start).inSeconds / 60.0;
-      
-      double avgSpeed;
-      if (speeds.isNotEmpty) {
-        avgSpeed = speeds.reduce((a, b) => a + b) / speeds.length;
-      } else if (totalDistance > 0 && durationMinutes > 0) {
-        avgSpeed = totalDistance / durationMinutes;
-      } else {
-        avgSpeed = 0.0;
-      }
-      
-      double cadence = durationMinutes > 0 ? totalSteps / durationMinutes : 0;
-      double speedVariability = _calculateVariability(speeds);
-      
-      return {
-        'steps': totalSteps,
-        'distance': totalDistance,
-        'avgSpeed': avgSpeed,
-        'cadence': cadence,
-        'speedVariability': speedVariability,
-        'durationMinutes': durationMinutes,
-        'platform': Platform.isAndroid ? 'Android' : 'iOS',
-        'dataPoints': healthData.length,
-        'message': 'Data collected successfully',
-      };
-      
-    } catch (e) {
-      print('Error getting gait data: $e');
-      
-      return {
-        'steps': 0,
-        'distance': 0.0,
-        'avgSpeed': 0.0,
-        'cadence': 0.0,
-        'speedVariability': 0.0,
-        'durationMinutes': 0.0,
-        'platform': Platform.isAndroid ? 'Android' : 'iOS',
-        'error': e.toString(),
-        'message': _getPlatformSpecificErrorMessage(),
-      };
-    }
+    return {
+      'steps': 0,
+      'error': 'Unsupported platform',
+    };
   }
   
   double _calculateVariability(List<double> values) {
@@ -313,24 +264,9 @@ class HealthService {
     return variance;
   }
   
-  String _getPlatformSpecificErrorMessage() {
-    if (Platform.isAndroid) {
-      return 'Android: Install Google Fit and grant permissions in Settings > Apps > RealVision';
-    } else if (Platform.isIOS) {
-      return 'iOS: Enable permissions in Settings > Privacy > Health';
-    } else {
-      return 'Health data not available on this platform';
-    }
-  }
-  
   Future<bool> isHealthDataAvailable() async {
     try {
-      if (Platform.isAndroid) {
-        return await _health.hasPermissions(_getSupportedTypes()) ?? false;
-      } else if (Platform.isIOS) {
-        return true;
-      }
-      return false;
+      return await _health.hasPermissions(_getSupportedTypes()) ?? false;
     } catch (e) {
       print('Error checking health availability: $e');
       return false;

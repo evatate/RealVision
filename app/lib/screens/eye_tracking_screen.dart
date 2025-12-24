@@ -232,11 +232,16 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     _cameraService.stopImageStream();
     _eyeTrackingService.clearData();
     
+    Provider.of<TestProgress>(context, listen: false).markFixationCompleted();
     _audioService.speak('Fixation test complete');
     
-    _showCompletionDialog('Fixation Test Complete', 'Moving to Pro-saccade test...', () {
-      Provider.of<TestProgress>(context, listen: false).markFixationCompleted();
-      _startProsaccadeTest();
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _currentTask = EyeTrackingTask.none;
+          _trialNumber = 0;
+        });
+      }
     });
   }
 
@@ -321,11 +326,18 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         _cameraService.stopImageStream();
         _eyeTrackingService.clearData();
         
+        Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
+        
         _audioService.speak('Pro-saccade test complete');
         
-        _showCompletionDialog('Pro-saccade Test Complete', 'Moving to Smooth Pursuit test...', () {
-          Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
-          _startSmoothPursuitTest();
+        // Return to test selection instead of auto-transitioning
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() {
+              _currentTask = EyeTrackingTask.none;
+              _trialNumber = 0;
+            });
+          }
         });
       }
       return;
@@ -406,21 +418,21 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         print('Smooth pursuit metrics: $metrics');
         
         _cameraService.stopImageStream();
-        _cameraService.dispose();
         _eyeTrackingService.clearData();
         
         Provider.of<TestProgress>(context, listen: false).markPursuitCompleted();
+        
+        // Speak completion message
         _audioService.speak('Smooth pursuit test complete. All eye tracking tests finished!');
         
-        if (mounted) {
-          setState(() {
-            _currentTask = EyeTrackingTask.none;
-            _trialNumber = 0;
-          });
-        }
-        
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) Navigator.pop(context);
+        // Wait longer before navigating to ensure audio completes
+        Future.delayed(const Duration(seconds: 5), () {
+          if (mounted) {
+            setState(() {
+              _currentTask = EyeTrackingTask.none;
+              _trialNumber = 0;
+            });
+          }
         });
       }
       return;

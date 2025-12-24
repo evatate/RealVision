@@ -26,6 +26,7 @@ dependencies:
   speech_to_text: 7.2.0
   flutter_tts: ^4.2.3
   permission_handler: ^12.0.1
+  record: ^4.4.4
   
   # Health Data
   health: ^13.2.1
@@ -38,7 +39,7 @@ dependencies:
   
   # Storage
   shared_preferences: ^2.2.2
-  path_provider: ^2.1.1
+  path_provider: ^2.1.1  # Already compatible!
   
   # Utilities
   intl: ^0.20.2

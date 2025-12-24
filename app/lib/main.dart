@@ -4,6 +4,7 @@ import 'screens/home_screen.dart';
 import 'models/test_progress.dart';
 import 'utils/colors.dart';
 import '../services/service_locator.dart';
+import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,7 +49,7 @@ class RealVisionApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const HomeScreen(),
+        home: const SplashScreen(),
       ),
     );
   }

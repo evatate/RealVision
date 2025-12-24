@@ -102,16 +102,13 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
       _waitingForSync = true;
     });
     
-    // Mark as completed immediately so user can continue
     Provider.of<TestProgress>(context, listen: false).markGaitCompleted();
     await _audioService.speak('Walking test complete. Step data will sync in background.');
     
-    // Return to home screen
     if (mounted) {
       Navigator.pop(context);
     }
     
-    // Query data after 2 minutes in background
     Future.delayed(const Duration(minutes: 2), () async {
       if (_startTime == null || _endTime == null) return;
       
@@ -157,71 +154,102 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
   }
 
   Widget _buildStartScreen() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          Icons.directions_walk,
-          size: 80,
-          color: AppColors.primary,
-        ),
-        SizedBox(height: 32),
-        
-        Text(
-          'Please walk normally for 2 minutes',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textDark,
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          SizedBox(height: 20),
+          
+          Icon(
+            Icons.directions_walk,
+            size: 80,
+            color: AppColors.primary,
           ),
-          textAlign: TextAlign.center,
-        ),
-        
-        SizedBox(height: 48),
-        
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _startTest,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              padding: EdgeInsets.all(24),
+          SizedBox(height: 24),
+          
+          Text(
+            'Please walk normally for 2 minutes',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textDark,
             ),
-            child: Text(
-              'Start Walking Test',
-              style: TextStyle(fontSize: 24, color: Colors.white),
-            ),
+            textAlign: TextAlign.center,
           ),
-        ),
-        
-        SizedBox(height: 32),
-        
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.blue[50],
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.blue[300]!, width: 2),
-          ),
-          child: Column(
-            children: [
-              Icon(Icons.info_outline, color: Colors.blue[900], size: 32),
-              SizedBox(height: 12),
-              Text(
-                Platform.isIOS
-                    ? 'Make sure Motion & Fitness is enabled:\nSettings > Privacy & Security > Motion & Fitness'
-                    : 'Install Google Fit or Samsung Health\nfor step tracking',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: AppColors.textDark,
-                  fontWeight: FontWeight.w500,
-                ),
-                textAlign: TextAlign.center,
+          
+          SizedBox(height: 32),
+          
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _startTest,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: EdgeInsets.all(20),
               ),
-            ],
+              child: Text(
+                'Start Walking Test',
+                style: TextStyle(fontSize: 22, color: Colors.white),
+              ),
+            ),
           ),
-        ),
-      ],
+          
+          SizedBox(height: 24),
+          
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.green[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.green[400]!, width: 2),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.system_update, color: Colors.green[900], size: 28),
+                SizedBox(height: 10),
+                Text(
+                  Platform.isIOS
+                      ? 'For Best Results: Install Google Fit'
+                      : 'Requires Google Fit',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: AppColors.textDark,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  Platform.isIOS
+                      ? 'Google Fit provides faster and more accurate step tracking than Apple Health.\n\nDownload from App Store before starting.'
+                      : 'Install Google Fit from the Play Store for step tracking.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textDark,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 10),
+                TextButton.icon(
+                  onPressed: () {
+                    print('Open app store link');
+                  },
+                  icon: Icon(Icons.download, color: Colors.green[700]),
+                  label: Text(
+                    'Get Google Fit',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.green[700],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          SizedBox(height: 20),
+        ],
+      ),
     );
   }
 

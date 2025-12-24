@@ -23,13 +23,11 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _initializeApp() async {
     try {
-      // Initialize audio service
       setState(() => _statusMessage = 'Setting up audio...');
       await Future.delayed(Duration(milliseconds: 500));
       final audioService = getIt<AudioService>();
       await audioService.initialize();
       
-      // Show ready status
       setState(() {
         _isLoading = false;
         _statusMessage = 'Ready!';
@@ -54,12 +52,12 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.all(32),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Spacer(),
+              SizedBox(height: 40),
               
               // App Logo/Icon
               Container(
@@ -115,28 +113,10 @@ class _SplashScreenState extends State<SplashScreen> {
                       ),
                     ),
                   ],
-                )
-              else
-                Column(
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
-                      size: 48,
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      _statusMessage,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green[700],
-                      ),
-                    ),
-                  ],
                 ),
               
-              Spacer(),
+              // Remove the "Ready" status section entirely
+              SizedBox(height: 48),
               
               // Instructions
               Container(
@@ -190,6 +170,9 @@ class _SplashScreenState extends State<SplashScreen> {
                     ),
                   ),
                 ),
+              
+              // Add extra space under the button
+              SizedBox(height: 40),
             ],
           ),
         ),
@@ -202,8 +185,8 @@ class _SplashScreenState extends State<SplashScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 32,
-          height: 32,
+          width: 28,
+          height: 28,
           decoration: BoxDecoration(
             color: AppColors.primary,
             shape: BoxShape.circle,
@@ -214,19 +197,19 @@ class _SplashScreenState extends State<SplashScreen> {
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
-                fontSize: 16,
+                fontSize: 14,
               ),
             ),
           ),
         ),
-        SizedBox(width: 12),
+        SizedBox(width: 10),
         Expanded(
           child: Padding(
-            padding: EdgeInsets.only(top: 6),
+            padding: EdgeInsets.only(top: 4),
             child: Text(
               text,
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 color: AppColors.textDark,
               ),
             ),
