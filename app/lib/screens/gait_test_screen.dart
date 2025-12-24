@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../models/test_progress.dart';
-import '../services/health_service.dart';
+import '../services/motion_sensor_service.dart';
 import '../services/audio_service.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../widgets/breadcrumb.dart';
 import 'dart:async';
-import 'dart:io' show Platform;
+import '../services/service_locator.dart';
 
 class GaitTestScreen extends StatefulWidget {
   const GaitTestScreen({super.key});
@@ -18,79 +17,63 @@ class GaitTestScreen extends StatefulWidget {
 }
 
 class _GaitTestScreenState extends State<GaitTestScreen> {
-  final HealthService _healthService = HealthService();
-  final AudioService _audioService = AudioService();
+  final MotionSensorService _motionService = MotionSensorService();
+  late AudioService _audioService;
   
   bool _isRecording = false;
   int _countdown = 0;
   Timer? _countdownTimer;
+  Timer? _stepUpdateTimer;
   DateTime? _startTime;
   DateTime? _endTime;
-  bool _waitingForSync = false;
 
   @override
   void initState() {
     super.initState();
+    _audioService = getIt<AudioService>();
     _audioService.initialize();
   }
 
   @override
   void dispose() {
     _countdownTimer?.cancel();
-    _audioService.dispose();
+    _stepUpdateTimer?.cancel();
+    _motionService.dispose();
     super.dispose();
   }
 
   Future<void> _startTest() async {
-    try {
-      final hasPermission = await _healthService.requestPermissions();
-      
-      if (!hasPermission && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              Platform.isIOS 
-                ? 'Please enable Motion & Fitness in Settings > Privacy & Security'
-                : 'Please install Google Fit and grant permissions',
-              style: TextStyle(fontSize: 18),
-            ),
-            duration: Duration(seconds: 4),
-          ),
-        );
+    setState(() {
+      _isRecording = true;
+      _countdown = AppConstants.gaitTestDuration;
+      _startTime = DateTime.now();
+    });
+
+    await _audioService.speak('Please walk normally for the next 2 minutes. Your steps are being counted.');
+
+    // Start motion sensor recording
+    _motionService.startRecording();
+    
+    // Update step count display every second
+    _stepUpdateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) setState(() {});
+    });
+
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
         return;
       }
-
+      
       setState(() {
-        _isRecording = true;
-        _countdown = AppConstants.gaitTestDuration;
-        _startTime = DateTime.now();
-      });
-
-      await _audioService.speak('Please walk normally for the next 2 minutes');
-
-      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (!mounted) {
-          timer.cancel();
-          return;
-        }
+        _countdown--;
         
-        setState(() {
-          _countdown--;
-          
-          if (_countdown <= 0) {
-            timer.cancel();
-            _completeTest();
-          }
-        });
+        if (_countdown <= 0) {
+          timer.cancel();
+          _completeTest();
+        }
       });
-    } catch (e) {
-      print('Error starting gait test: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    }
+    });
   }
 
   Future<void> _completeTest() async {
@@ -98,37 +81,30 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
 
     _endTime = DateTime.now();
     
-    setState(() {
-      _isRecording = false;
-      _waitingForSync = true;
-    });
+    setState(() => _isRecording = false);
+    _stepUpdateTimer?.cancel();
+    
+    // Stop recording and get results
+    final gaitData = _motionService.stopRecording(_startTime!, _endTime!);
     
     Provider.of<TestProgress>(context, listen: false).markGaitCompleted();
-    await _audioService.speak('Walking test complete. Step data will sync in background.');
     
-    if (mounted) {
-      Navigator.pop(context);
-    }
+    await _audioService.speak(
+      'Walking test complete. You took ${gaitData['steps']} steps.'
+    );
     
-    Future.delayed(const Duration(minutes: 2), () async {
-      if (_startTime == null || _endTime == null) return;
-      
-      try {
-        final gaitData = await _healthService.getGaitData(
-          start: _startTime!,
-          end: _endTime!,
-        );
-        
-        print('==== WALKING TEST RESULTS (queried 2 min later) ====');
-        print('Steps: ${gaitData['steps']}');
-        print('Duration: ${gaitData['durationMinutes']} min');
-        print('Distance: ${gaitData['distance']} m');
-        print('Avg Speed: ${gaitData['avgSpeed']} m/s');
-        print('Message: ${gaitData['message']}');
-        print('===================================================');
-      } catch (e) {
-        print('Error getting delayed gait data: $e');
-      }
+    print('==== WALKING TEST RESULTS ====');
+    print('Steps: ${gaitData['steps']}');
+    print('Duration: ${gaitData['durationMinutes']} min');
+    print('Cadence: ${gaitData['cadence']} steps/min');
+    print('Avg Acceleration: ${gaitData['avgAcceleration']} m/s²');
+    print('Acceleration Variability: ${gaitData['accelerationVariability']}');
+    print('Rotation Rate: ${gaitData['rotationRate']} rad/s');
+    print('Data Source: ${gaitData['dataSource']}');
+    print('==============================');
+    
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) Navigator.pop(context);
     });
   }
 
@@ -179,6 +155,41 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
           
           SizedBox(height: 28),
           
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue[300]!, width: 2),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue[900], size: 26),
+                SizedBox(height: 8),
+                Text(
+                  'Using Motion Sensors',
+                  style: TextStyle(
+                    fontSize: 20,
+                    color: AppColors.textDark,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Keep your phone in your pocket or hand while walking. The app will count your steps using the accelerometer.',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: AppColors.textDark,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          
+          SizedBox(height: 28),
+          
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -194,80 +205,6 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
             ),
           ),
           
-          SizedBox(height: 32),
-          
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.green[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.green[400]!, width: 2),
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.info_outline, color: Colors.green[900], size: 26),
-                SizedBox(height: 8),
-                Text(
-                  'Install Google Fit',
-                  style: TextStyle(
-                    fontSize: 20,
-                    color: AppColors.textDark,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 8),
-                Text(
-                  Platform.isIOS
-                      ? '1. Open Google Fit\n2. Grant Motion & Fitness permissions\n3. Return to this app'
-                      : '1. Open Google Fit\n2. Complete setup\n3. Grant permissions\n4. Return here',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: AppColors.textDark,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 10),
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    // for iOS open App Store directly
-                    final url = Platform.isIOS
-                        ? 'https://apps.apple.com/us/app/google-fit-activity-tracker/id1433864494'
-                        : 'https://play.google.com/store/apps/details?id=com.google.android.apps.fitness';
-                    
-                    final uri = Uri.parse(url);
-
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(
-                        uri,
-                        mode: LaunchMode.externalApplication,
-                      );
-                    } else {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Could not open app store')),
-                        );
-                      } 
-                    }
-                  },
-                  icon: Icon(Icons.download, color: Colors.white, size: 18),
-                  label: Text(
-                    'Get Google Fit',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green[700],
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
           SizedBox(height: 20),
         ],
       ),
@@ -275,6 +212,8 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
   }
 
   Widget _buildRecordingScreen() {
+    final currentSteps = _motionService.currentStepCount;
+    
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -296,12 +235,43 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
         
         SizedBox(height: 48),
         
+        // Step counter
+        Container(
+          padding: EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.green[50],
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.green[300]!, width: 3),
+          ),
+          child: Column(
+            children: [
+              Text(
+                '$currentSteps',
+                style: TextStyle(
+                  fontSize: 64,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
+              ),
+              Text(
+                'steps',
+                style: TextStyle(
+                  fontSize: 24,
+                  color: AppColors.textMedium,
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        SizedBox(height: 32),
+        
         Text(
           '${_countdown}s',
           style: TextStyle(
-            fontSize: 72,
+            fontSize: 48,
             fontWeight: FontWeight.bold,
-            color: AppColors.primary,
+            color: AppColors.textDark,
           ),
         ),
         

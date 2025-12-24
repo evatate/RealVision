@@ -11,7 +11,7 @@ dependencies:
     sdk: flutter
   get_it: ^7.6.4
   
-  # smile
+  # Face & Smile
   google_mlkit_face_detection: ^0.10.0
   
   # UI & Design
@@ -22,13 +22,16 @@ dependencies:
   camera: ^0.11.3
   image: ^4.1.3
   
-  # Audio
+  # Audio & Speech
   speech_to_text: 7.2.0
   flutter_tts: ^4.2.3
   permission_handler: ^12.0.1
   record: ^4.4.4
   
-  # Health Data
+  # Motion Sensors
+  sensors_plus: ^7.0.0
+  
+  # Health Data (optional, keeping for fallback)
   health: ^13.2.1
   
   # ML Models
@@ -37,9 +40,10 @@ dependencies:
   # State Management
   provider: ^6.1.1
   
-  # Storage
+  # Storage & HTTP
   shared_preferences: ^2.2.2
-  path_provider: ^2.1.1  # Already compatible!
+  path_provider: ^2.1.1
+  http: ^1.2.2
   
   # Utilities
   intl: ^0.20.2
