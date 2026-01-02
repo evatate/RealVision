@@ -43,17 +43,30 @@ class AWSAuthService {
     }
   }
   
-  /// Create synthetic user account for privacy
-  /// Email: study-participant-{uuid}@realvision.local
-  /// Password: Secure random 32-character string
-  Future<String?> signInAnonymously() async {
+  /// Check if user is already signed in, if not create synthetic account
+  /// Only call this ONCE at app startup
+  Future<String?> ensureSignedIn() async {
     try {
-      // Check if user already exists locally
+      // First check if already signed in with Amplify
+      final session = await Amplify.Auth.fetchAuthSession();
+      
+      if (session.isSignedIn) {
+        safePrint('User already signed in');
+        final user = await Amplify.Auth.getCurrentUser();
+        _currentUserId = user.userId;
+        await _secureStorage.write(key: _USER_ID_KEY, value: _currentUserId);
+        return _currentUserId;
+      }
+      
+      safePrint('No active session, checking stored credentials...');
+      
+      // Check if we have stored credentials
       final existingEmail = await _secureStorage.read(key: _USER_EMAIL_KEY);
       final existingPassword = await _secureStorage.read(key: _USER_PASSWORD_KEY);
       
       if (existingEmail != null && existingPassword != null) {
         // Try signing in with existing credentials
+        safePrint('Found stored credentials, attempting sign-in...');
         try {
           final result = await Amplify.Auth.signIn(
             username: existingEmail,
@@ -65,20 +78,33 @@ class AWSAuthService {
             _currentUserId = user.userId;
             await _secureStorage.write(key: _USER_ID_KEY, value: _currentUserId);
             
-            safePrint('Signed in with existing account: $_currentUserId');
+            safePrint('Signed in with existing credentials: $_currentUserId');
             return _currentUserId;
           }
         } catch (e) {
-          safePrint('Existing credentials invalid, creating new account: $e');
-          // Fall through to create new account
+          safePrint('Stored credentials invalid: $e');
+          // Clear invalid credentials
+          await _secureStorage.deleteAll();
         }
       }
       
-      // Create new synthetic user
+      // No valid session or credentials - create new synthetic user
+      safePrint('Creating new synthetic user account...');
+      return await _createSyntheticUser();
+      
+    } catch (e) {
+      safePrint('Error in ensureSignedIn: $e');
+      return null;
+    }
+  }
+  
+  /// Create new synthetic user (private method)
+  Future<String?> _createSyntheticUser() async {
+    try {
       final syntheticEmail = 'study-participant-${_uuid.v4()}@realvision.local';
       final securePassword = _generateSecurePassword();
       
-      safePrint('Creating synthetic user: $syntheticEmail');
+      safePrint('Email: $syntheticEmail');
       
       // Sign up new user
       final signUpResult = await Amplify.Auth.signUp(
@@ -91,37 +117,40 @@ class AWSAuthService {
         ),
       );
       
-      // Auto-confirm user
-      if (signUpResult.isSignUpComplete) {
-        // Sign in immediately
-        final signInResult = await Amplify.Auth.signIn(
-          username: syntheticEmail,
-          password: securePassword,
-        );
+      if (!signUpResult.isSignUpComplete) {
+        safePrint('Auto-confirm not working. Check Lambda trigger.');
+        return null;
+      }
+      
+      // Sign in immediately
+      final signInResult = await Amplify.Auth.signIn(
+        username: syntheticEmail,
+        password: securePassword,
+      );
+      
+      if (signInResult.isSignedIn) {
+        final user = await Amplify.Auth.getCurrentUser();
+        _currentUserId = user.userId;
         
-        if (signInResult.isSignedIn) {
-          final user = await Amplify.Auth.getCurrentUser();
-          _currentUserId = user.userId;
-          
-          // Store credentials securely
-          await _secureStorage.write(key: _USER_ID_KEY, value: _currentUserId);
-          await _secureStorage.write(key: _USER_EMAIL_KEY, value: syntheticEmail);
-          await _secureStorage.write(key: _USER_PASSWORD_KEY, value: securePassword);
-          
-          safePrint('New synthetic user created: $_currentUserId');
-          return _currentUserId;
-        }
+        // Store credentials securely
+        await _secureStorage.write(key: _USER_ID_KEY, value: _currentUserId);
+        await _secureStorage.write(key: _USER_EMAIL_KEY, value: syntheticEmail);
+        await _secureStorage.write(key: _USER_PASSWORD_KEY, value: securePassword);
+        
+        safePrint('New synthetic user created: $_currentUserId');
+        return _currentUserId;
       }
       
       return null;
       
     } catch (e) {
-      safePrint('Sign in error: $e');
+      safePrint('Error creating synthetic user: $e');
       return null;
     }
   }
   
   /// Generate cryptographically secure random password
+  /// Meets Cognito requirements: uppercase, lowercase, numbers, symbols, min 8 chars
   String _generateSecurePassword() {
     final uuid1 = _uuid.v4().replaceAll('-', '');
     final uuid2 = _uuid.v4().replaceAll('-', '');

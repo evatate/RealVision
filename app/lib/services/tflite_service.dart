@@ -1,4 +1,5 @@
 import 'package:tflite_flutter/tflite_flutter.dart';
+import '../utils/logger.dart';
 import 'dart:typed_data';
 
 class TFLiteService {
@@ -14,7 +15,7 @@ class TFLiteService {
       _facialInterpreter = await Interpreter.fromAsset('assets/models/facial_model.tflite');
       _gaitInterpreter = await Interpreter.fromAsset('assets/models/gait_model.tflite');
     } catch (e) {
-      print('Error loading models: $e');
+      AppLogger.logger.warning('Error loading models: $e');
       // Models may not exist yet - this is expected during development
     }
   }

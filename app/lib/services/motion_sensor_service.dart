@@ -1,4 +1,5 @@
 import 'package:sensors_plus/sensors_plus.dart';
+import '../utils/logger.dart';
 import 'dart:async';
 import 'dart:math';
 
@@ -20,7 +21,7 @@ class MotionSensorService {
   
   /// Start recording motion data
   void startRecording() {
-    print('Starting motion sensor recording...');
+    AppLogger.logger.info('Starting motion sensor recording...');
     _stepCount = 0;
     _accelerometerData.clear();
     _gyroscopeData.clear();
@@ -59,7 +60,7 @@ class MotionSensorService {
         _stepCount++;
         _lastStepTime = now;
         _isPeakDetected = true;
-        print('Step detected! Total: $_stepCount');
+        AppLogger.logger.fine('Step detected! Total: $_stepCount');
       }
     } else if (magnitude < STEP_THRESHOLD) {
       _isPeakDetected = false;
@@ -70,7 +71,7 @@ class MotionSensorService {
   
   /// Stop recording and get results
   Map<String, dynamic> stopRecording(DateTime startTime, DateTime endTime) {
-    print('Stopping motion sensor recording...');
+    AppLogger.logger.info('Stopping motion sensor recording...');
     
     _accelerometerSubscription?.cancel();
     _gyroscopeSubscription?.cancel();

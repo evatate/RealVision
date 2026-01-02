@@ -4,6 +4,7 @@ import '../models/test_progress.dart';
 import '../services/audio_service.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
+import '../utils/logger.dart';
 import '../widgets/breadcrumb.dart';
 
 class SpeechTestScreen extends StatefulWidget {
@@ -40,7 +41,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
         _hasSpoken = true;
       }
     } catch (e) {
-      print('Audio initialization error: $e');
+      AppLogger.logger.severe('Audio initialization error: $e');
       setState(() => _initialized = true);
     }
   }
@@ -59,7 +60,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
           }
         },
         onError: (error) {
-          print('Speech recognition error: $error');
+          AppLogger.logger.severe('Speech recognition error: $error');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -71,7 +72,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
         },
       );
     } catch (e) {
-      print('Error starting speech test: $e');
+      AppLogger.logger.severe('Error starting speech test: $e');
       if (mounted) {
         setState(() => _isListening = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -114,8 +115,8 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     
     await _audioService.speak('Thank you. Speech test complete.');
     
-    print('Speech transcript: $finalTranscript');
-    print('Transcript length: ${finalTranscript.split(' ').length} words');
+    AppLogger.logger.info('Speech transcript: $finalTranscript');
+    AppLogger.logger.info('Transcript length: ${finalTranscript.split(' ').length} words');
     
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) Navigator.pop(context);
@@ -195,6 +196,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
                             padding: EdgeInsets.all(20),
                           ),
                         ),
@@ -263,6 +265,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                               onPressed: _stopTest,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
                                 padding: EdgeInsets.all(18),
                               ),
                               child: Text(

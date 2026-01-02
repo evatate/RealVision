@@ -1,96 +1,128 @@
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
 import 'dart:ui';
+import 'dart:typed_data';
+import 'dart:convert';
+import '../utils/logger.dart';
 
 class FaceDetectionService {
-  late FaceDetector _faceDetector;
+  late final FaceDetector _faceDetector;
+
   bool _isProcessing = false;
+  int _frameCounter = 0;
+
+  /// Process every Nth frame to reduce load
+  static const int _frameSkipRate = 2; // Process every 2nd frame (15 FPS) - more responsive
   
+  // Stability: keep last result for a few frames to reduce flickering
+  FaceDetectionResult? _lastResult;
+  int _lastResultAge = 0;
+  static const int _maxResultAge = 5; // Keep result for 5 frames (~0.3 seconds)
+
   FaceDetectionService() {
     _faceDetector = FaceDetector(
       options: FaceDetectorOptions(
         enableClassification: true,
         enableTracking: true,
-        minFaceSize: 0.15,
         performanceMode: FaceDetectorMode.accurate,
+        minFaceSize: 0.1, // 10% of image - better for front camera
       ),
     );
   }
-  
-  /// Process camera image and detect faces
-  Future<FaceDetectionResult> detectFace(CameraImage image, InputImageRotation rotation) async {
-    if (_isProcessing) {
-      return FaceDetectionResult(
-        faceDetected: false,
-        isSmiling: false,
-        smilingProbability: 0.0,
-      );
-    }
+
+  /// Main face detection entry point
+  Future<FaceDetectionResult> detectFace(
+    CameraImage image,
+    InputImageRotation rotation,
+  ) async {
+    _frameCounter++;
     
-    _isProcessing = true;
-    
-    try {
-      // Convert CameraImage to InputImage for ML Kit
-      final inputImage = _convertCameraImage(image, rotation);
-      if (inputImage == null) {
-        _isProcessing = false;
-        return FaceDetectionResult(faceDetected: false);
+    // If we're skipping this frame, return last result if it's recent
+    if (_frameCounter % _frameSkipRate != 0) {
+      _lastResultAge++;
+      if (_lastResult != null && _lastResultAge <= _maxResultAge) {
+        return _lastResult!;
       }
-      
-      // Detect faces
-      final List<Face> faces = await _faceDetector.processImage(inputImage);
-      
-      _isProcessing = false;
-      
-      if (faces.isEmpty) {
-        return FaceDetectionResult(faceDetected: false);
-      }
-      
-      final face = faces.first;
-      
-      // Check if smiling (classification returns probability 0-1)
-      final smileProbability = face.smilingProbability ?? 0.0;
-      final isSmiling = smileProbability > 0.7; // 70% threshold
-      
-      return FaceDetectionResult(
-        faceDetected: true,
-        isSmiling: isSmiling,
-        smilingProbability: smileProbability,
-        boundingBox: face.boundingBox,
-        leftEyeOpenProbability: face.leftEyeOpenProbability,
-        rightEyeOpenProbability: face.rightEyeOpenProbability,
-      );
-      
-    } catch (e) {
-      print('Face detection error: $e');
-      _isProcessing = false;
       return FaceDetectionResult(faceDetected: false);
     }
-  }
-  
-  /// Convert CameraImage to InputImage
-  InputImage? _convertCameraImage(CameraImage image, InputImageRotation rotation) {
-    try {
-      final WriteBuffer allBytes = WriteBuffer();
-      for (final Plane plane in image.planes) {
-        allBytes.putUint8List(plane.bytes);
+
+    if (_isProcessing) {
+      _lastResultAge++;
+      if (_lastResult != null && _lastResultAge <= _maxResultAge) {
+        return _lastResult!;
       }
-      final bytes = allBytes.done().buffer.asUint8List();
+      return FaceDetectionResult(faceDetected: false);
+    }
+
+    _isProcessing = true;
+
+    try {
+      final inputImage = _convertCameraImage(image, rotation);
+      if (inputImage == null) {
+        _lastResultAge++;
+        return _lastResult ?? FaceDetectionResult(faceDetected: false);
+      }
+
+      final faces = await _faceDetector.processImage(inputImage);
+
+      FaceDetectionResult result;
+      if (faces.isEmpty) {
+        AppLogger.logger.fine('No faces detected in image');
+        result = FaceDetectionResult(faceDetected: false);
+      } else {
+        AppLogger.logger.fine('Detected ${faces.length} face(s)');
+        final face = faces.first;
+        final smileProbability = face.smilingProbability ?? 0.0;
+        
+        result = FaceDetectionResult(
+          faceDetected: true,
+          isSmiling: smileProbability > 0.7,
+          smilingProbability: smileProbability,
+          boundingBox: face.boundingBox,
+          leftEyeOpenProbability: face.leftEyeOpenProbability,
+          rightEyeOpenProbability: face.rightEyeOpenProbability,
+        );
+      }
+      
+      // Update stability tracking
+      _lastResult = result;
+      _lastResultAge = 0;
+      
+      return result;
+      
+    } catch (e) {
+      AppLogger.logger.severe('Face detection error: $e');
+      _lastResultAge++;
+      return _lastResult ?? FaceDetectionResult(faceDetected: false);
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  /// Converts CameraImage → InputImage (cross-platform)
+  InputImage? _convertCameraImage(
+    CameraImage image,
+    InputImageRotation rotation,
+  ) {
+    try {
+      // Calculate total size and concatenate all planes
+      int totalSize = 0;
+      for (final plane in image.planes) {
+        totalSize += plane.bytes.length;
+      }
+      
+      final bytes = Uint8List(totalSize);
+      int offset = 0;
+      for (final plane in image.planes) {
+        bytes.setRange(offset, offset + plane.bytes.length, plane.bytes);
+        offset += plane.bytes.length;
+      }
       
       final imageSize = Size(image.width.toDouble(), image.height.toDouble());
       
+      // Use actual image format instead of hardcoding
       final inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw) 
-          ?? InputImageFormat.nv21;
-      
-      final planeData = image.planes.map((Plane plane) {
-        return InputImageMetadata(
-          size: imageSize,
-          rotation: rotation,
-          format: inputImageFormat,
-          bytesPerRow: plane.bytesPerRow,
-        );
-      }).toList();
+          ?? InputImageFormat.bgra8888; // fallback for iOS
       
       final inputImageMetadata = InputImageMetadata(
         size: imageSize,
@@ -104,17 +136,17 @@ class FaceDetectionService {
         metadata: inputImageMetadata,
       );
     } catch (e) {
-      print('Error converting camera image: $e');
+      AppLogger.logger.severe('Image conversion error: $e');
       return null;
     }
   }
-  
+
   void dispose() {
     _faceDetector.close();
   }
 }
 
-/// Result from face detection
+/// Face detection result model
 class FaceDetectionResult {
   final bool faceDetected;
   final bool isSmiling;
@@ -122,7 +154,7 @@ class FaceDetectionResult {
   final Rect? boundingBox;
   final double? leftEyeOpenProbability;
   final double? rightEyeOpenProbability;
-  
+
   FaceDetectionResult({
     required this.faceDetected,
     this.isSmiling = false,

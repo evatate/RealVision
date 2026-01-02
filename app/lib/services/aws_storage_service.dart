@@ -4,6 +4,7 @@ import 'package:amplify_storage_s3/amplify_storage_s3.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'aws_auth_service.dart';
+import '../utils/logger.dart';
 
 /// Secure AWS Storage Service
 class AWSStorageService {
@@ -29,7 +30,7 @@ class AWSStorageService {
       final fileName = 'speech_$timestamp.wav';
       final s3Key = 'private/$userId/audio/$fileName';
       
-      safePrint('Uploading to S3: $s3Key');
+      AppLogger.logger.info('Uploading to S3: $s3Key');
       
       // Upload to S3 with Amplify Storage
       final result = await Amplify.Storage.uploadFile(
@@ -42,13 +43,13 @@ class AWSStorageService {
         ),
       ).result;
       
-      safePrint('Upload complete: ${result.uploadedItem.path}');
+      AppLogger.logger.info('Upload complete: ${result.uploadedItem.path}');
       
       // Return the S3 key for later reference
       return s3Key;
       
     } catch (e) {
-      safePrint('Upload error: $e');
+      AppLogger.logger.severe('Upload error: $e');
       return null;
     }
   }
@@ -64,10 +65,10 @@ class AWSStorageService {
       // Get auth headers with Cognito tokens
       final headers = await _authService.getAuthHeaders();
       
-      // Your API Gateway endpoint URL
+      // API Gateway endpoint URL
       const apiEndpoint = 'https://3nn8vej5pf.execute-api.us-east-2.amazonaws.com/prod/transcribe';
       
-      safePrint('📞 Calling Transcribe API: $apiEndpoint');
+      AppLogger.logger.info('📞 Calling Transcribe API: $apiEndpoint');
       
       final response = await http.post(
         Uri.parse(apiEndpoint),
@@ -86,15 +87,15 @@ class AWSStorageService {
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        safePrint('Transcription initiated: ${data['jobName']}');
+        AppLogger.logger.info('Transcription initiated: ${data['jobName']}');
         return data;
       } else {
-        safePrint('Transcription error: ${response.statusCode} - ${response.body}');
+        AppLogger.logger.severe('Transcription error: ${response.statusCode} - ${response.body}');
         return null;
       }
       
     } catch (e) {
-      safePrint('Transcription error: $e');
+      AppLogger.logger.severe('Transcription error: $e');
       return null;
     }
   }
@@ -116,13 +117,13 @@ class AWSStorageService {
         final data = json.decode(response.body);
         
         if (data['status'] == 'COMPLETED') {
-          safePrint('Transcription complete!');
+          AppLogger.logger.info('Transcription complete!');
           return _parseTranscribeResults(data['transcript']);
         } else if (data['status'] == 'IN_PROGRESS') {
-          safePrint('Transcription in progress...');
+          AppLogger.logger.info('Transcription in progress...');
           return null;
         } else {
-          safePrint('Transcription failed: ${data['status']}');
+          AppLogger.logger.warning('Transcription failed: ${data['status']}');
           return null;
         }
       }
@@ -130,7 +131,7 @@ class AWSStorageService {
       return null;
       
     } catch (e) {
-      safePrint('Error getting results: $e');
+      AppLogger.logger.severe('Error getting results: $e');
       return null;
     }
   }
@@ -198,11 +199,11 @@ class AWSStorageService {
         localFile: AWSFile.fromPath(localPath),
       ).result;
       
-      safePrint('Download complete: ${result.localFile.path}');
+      AppLogger.logger.info('Download complete: ${result.localFile.path}');
       return result.localFile.path;
       
     } catch (e) {
-      safePrint('Download error: $e');
+      AppLogger.logger.severe('Download error: $e');
       return null;
     }
   }
@@ -220,7 +221,7 @@ class AWSStorageService {
       return result.items.map((item) => item.path).toList();
       
     } catch (e) {
-      safePrint('List error: $e');
+      AppLogger.logger.severe('List error: $e');
       return [];
     }
   }

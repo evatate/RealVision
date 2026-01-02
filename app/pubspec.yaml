@@ -12,7 +12,8 @@ dependencies:
   get_it: ^7.6.4
   
   # Face & Smile
-  google_mlkit_face_detection: ^0.10.0
+  google_mlkit_face_detection: ^0.13.1
+  google_mlkit_commons: ^0.11.0
   
   # UI & Design
   cupertino_icons: ^1.0.6
@@ -48,6 +49,7 @@ dependencies:
   # Utilities
   intl: ^0.20.2
   url_launcher: ^6.2.5 
+  logging: ^1.2.0 
 
   # AWS Amplify packages
   amplify_flutter: ^2.0.0

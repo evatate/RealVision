@@ -8,6 +8,7 @@ import '../services/audio_service.dart';
 import '../services/face_detection_service.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
+import '../utils/logger.dart';
 import '../widgets/breadcrumb.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -135,20 +136,22 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
       await _audioService.speak('Practice round. Keep neutral face');
       _startCountdown();
     } catch (e) {
-      print('Camera error: $e');
+      AppLogger.logger.severe('Camera error: $e');
     }
   }
 
   void _startFaceDetection() async {
     try {
-      await _cameraService.startImageStream((CameraImage image) async {
+      await _cameraService.startImageStream((CameraImage image, InputImageRotation rotation) async {
         if (_faceDetectionTimer?.isActive ?? false) return;
         
         _faceDetectionTimer = Timer(Duration(milliseconds: 500), () async {
           final result = await _faceDetector.detectFace(
             image,
-            InputImageRotation.rotation0deg,
+            rotation, // Use the correct rotation from camera service
           );
+          
+          AppLogger.logger.fine('Face detection result: faceDetected=${result.faceDetected}, smile=${result.smilingProbability}');
           
           if (mounted) {
             setState(() {
@@ -159,7 +162,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
         });
       });
     } catch (e) {
-      print('Error starting face detection: $e');
+      AppLogger.logger.severe('Error starting face detection: $e');
     }
   }
 
@@ -289,6 +292,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
                 onPressed: _showInstructions,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
                   padding: EdgeInsets.all(24),
                 ),
                 child: Text(

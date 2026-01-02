@@ -1,4 +1,5 @@
 import 'package:health/health.dart';
+import '../utils/logger.dart';
 import 'dart:io' show Platform;
 
 class HealthService {
@@ -45,17 +46,17 @@ class HealthService {
     try {
       if (Platform.isIOS) {
         // On iOS, check if Google Fit is installed first
-        print('iOS: Checking for Google Fit...');
+        AppLogger.logger.info('iOS: Checking for Google Fit...');
         _useGoogleFit = await isGoogleFitInstalled();
         
         if (!_useGoogleFit) {
-          print('iOS: Google Fit not detected, using HealthKit as fallback');
+          AppLogger.logger.info('iOS: Google Fit not detected, using HealthKit as fallback');
         } else {
-          print('iOS: Using Google Fit for step tracking');
+          AppLogger.logger.info('iOS: Using Google Fit for step tracking');
         }
       } else {
         // Android uses Google Fit by default
-        print('Android: Using Google Fit');
+        AppLogger.logger.info('Android: Using Google Fit');
         _useGoogleFit = true;
       }
       
@@ -67,15 +68,15 @@ class HealthService {
       
       if (granted == true) {
         _permissionsGranted = true;
-        print('Health permissions granted');
+        AppLogger.logger.info('Health permissions granted');
         return true;
       }
       
-      print('Health permissions denied');
+      AppLogger.logger.warning('Health permissions denied');
       return false;
       
     } catch (e) {
-      print('Error requesting health permissions: $e');
+      AppLogger.logger.severe('Error requesting health permissions: $e');
       return false;
     }
   }
@@ -106,7 +107,7 @@ class HealthService {
     
     // Google Fit (iOS) or Android - query with expanded time window
     if (_useGoogleFit || Platform.isAndroid) {
-      print('Querying Google Fit data from $start to $end');
+      AppLogger.logger.info('Querying Google Fit data from $start to $end');
       
       // Query with 5-minute buffer on each side
       final queryStart = start.subtract(Duration(minutes: 5));
@@ -119,7 +120,7 @@ class HealthService {
           types: types,
         );
         
-        print('Retrieved ${healthData.length} health data points from Google Fit');
+        AppLogger.logger.info('Retrieved ${healthData.length} health data points from Google Fit');
         
         // Filter to actual test window
         healthData = healthData.where((point) {
@@ -174,7 +175,7 @@ class HealthService {
         };
         
       } catch (e) {
-        print('Error getting Google Fit data: $e');
+        AppLogger.logger.severe('Error getting Google Fit data: $e');
         return {
           'steps': 0,
           'distance': 0.0,
@@ -190,13 +191,13 @@ class HealthService {
     
     // iOS HealthKit fallback (when Google Fit not installed)
     if (Platform.isIOS && !_useGoogleFit) {
-      print('iOS HealthKit: Querying last 10 minutes of activity...');
+      AppLogger.logger.info('iOS HealthKit: Querying last 10 minutes of activity...');
       final recentStart = DateTime.now().subtract(Duration(minutes: 10));
       final recentEnd = DateTime.now();
       
       try {
         int recentSteps = await _health.getTotalStepsInInterval(recentStart, recentEnd) ?? 0;
-        print('iOS HealthKit: Found $recentSteps steps in last 10 minutes');
+        AppLogger.logger.info('iOS HealthKit: Found $recentSteps steps in last 10 minutes');
         
         if (recentSteps > 0) {
           int estimatedTestSteps = (recentSteps * (durationMinutes / 10)).round();
@@ -230,7 +231,7 @@ class HealthService {
           };
         }
       } catch (e) {
-        print('iOS HealthKit error: $e');
+        AppLogger.logger.severe('iOS HealthKit error: $e');
         return {
           'steps': 0,
           'distance': 0.0,
@@ -268,7 +269,7 @@ class HealthService {
     try {
       return await _health.hasPermissions(_getSupportedTypes()) ?? false;
     } catch (e) {
-      print('Error checking health availability: $e');
+      AppLogger.logger.severe('Error checking health availability: $e');
       return false;
     }
   }

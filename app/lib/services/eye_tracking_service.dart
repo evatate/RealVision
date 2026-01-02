@@ -2,8 +2,30 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../utils/logger.dart';
 import 'dart:ui';
 import 'dart:math' as math;
+import 'dart:async';
+import 'dart:convert';
+
+// Data class for background qprocessing
+class _ProcessingData {
+  final CameraImage image;
+  final Offset targetPosition;
+  final Size screenSize;
+  final Offset driftOffset;
+  final bool isCollectingDriftData;
+  final InputImageRotation rotation;
+
+  _ProcessingData({
+    required this.image,
+    required this.targetPosition,
+    required this.screenSize,
+    required this.driftOffset,
+    required this.isCollectingDriftData,
+    required this.rotation,
+  });
+}
 
 class GazePoint {
   final Offset eyePosition;
@@ -30,58 +52,64 @@ class EyeTrackingService {
   bool _isProcessing = false;
   final List<GazePoint> _gazeData = [];
   
+  // Drift correction variables
+  Offset _driftOffset = Offset.zero;
+  bool _isCollectingDriftData = false;
+  final List<Offset> _driftSamples = [];
+  
+  // Performance optimization: adaptive frame processing
+  int _frameCounter = 0;
+  static const int _normalFrameSkipRate = 1; // Full processing during critical assessment periods
+  static const int _backgroundFrameSkipRate = 2; // Better responsiveness during non-assessment periods
+  
+  int get _currentFrameSkipRate => _isAssessmentActive ? _normalFrameSkipRate : _backgroundFrameSkipRate;
+  bool _isAssessmentActive = false; // Set this based on trial state
+  
+  // Stability: keep last result for a few frames to reduce flickering
+  GazePoint? _lastGazePoint;
+  int _lastResultAge = 0;
+  static const int _maxResultAge = 5; // Keep result for 5 frames (~0.3 seconds)
+  
   EyeTrackingService() {
     _faceDetector = FaceDetector(
       options: FaceDetectorOptions(
         enableClassification: true,
         enableLandmarks: true,
         enableTracking: true,
-        minFaceSize: 0.15,
+        minFaceSize: 0.1, // Match face detection service
         performanceMode: FaceDetectorMode.accurate,
       ),
     );
   }
-  
-  /// Track user's gaze relative to target position
-  Future<GazePoint?> trackGaze(
-    CameraImage image,
-    Offset targetPosition,
-    Size screenSize,
-  ) async {
-    if (_isProcessing) return null;
-    
-    _isProcessing = true;
-    
+
+  // Background processing function for ML inference
+  static Future<GazePoint?> _processImageInBackground(_ProcessingData data) async {
+    final faceDetector = FaceDetector(
+      options: FaceDetectorOptions(
+        enableClassification: true,
+        enableLandmarks: true,
+        enableTracking: true,
+        minFaceSize: 0.1, // Match face detection service
+        performanceMode: FaceDetectorMode.accurate,
+      ),
+    );
+
     try {
-      final inputImage = _convertCameraImage(image, InputImageRotation.rotation0deg);
-      if (inputImage == null) {
-        _isProcessing = false;
-        return null;
-      }
-      
-      final List<Face> faces = await _faceDetector.processImage(inputImage);
-      
-      _isProcessing = false;
-      
+      final inputImage = _convertCameraImageStatic(data.image, data.rotation);
+      if (inputImage == null) return null;
+
+      final List<Face> faces = await faceDetector.processImage(inputImage);
+
       if (faces.isEmpty) return null;
-      
+
       final face = faces.first;
       
       // Get key landmarks
       final leftEye = face.landmarks[FaceLandmarkType.leftEye];
       final rightEye = face.landmarks[FaceLandmarkType.rightEye];
       final noseBase = face.landmarks[FaceLandmarkType.noseBase];
-      final leftMouth = face.landmarks[FaceLandmarkType.leftMouth];
-      final rightMouth = face.landmarks[FaceLandmarkType.rightMouth];
       
       if (leftEye == null || rightEye == null || noseBase == null) return null;
-      
-      // Calculate face center and size
-      final faceBox = face.boundingBox;
-      final faceCenter = Offset(
-        faceBox.left + faceBox.width / 2,
-        faceBox.top + faceBox.height / 2,
-      );
       
       // Calculate eye center
       final eyeCenter = Offset(
@@ -90,38 +118,31 @@ class EyeTrackingService {
       );
       
       // Get head pose angles
-      final headPitch = face.headEulerAngleX ?? 0.0; // Up/down tilt
-      final headYaw = face.headEulerAngleY ?? 0.0;   // Left/right turn
-      final headRoll = face.headEulerAngleZ ?? 0.0;  // Tilt
+      final headPitch = face.headEulerAngleX ?? 0.0;
+      final headYaw = face.headEulerAngleY ?? 0.0;
+      final headRoll = face.headEulerAngleZ ?? 0.0;
       
-      // CRITICAL FIX: Map camera frame to screen coordinates
-      // Camera is in portrait but might be rotated
-      // Image dimensions are in camera's native orientation
-      var screenX = eyeCenter.dx / image.width.toDouble();
-      var screenY = eyeCenter.dy / image.height.toDouble();
+      // Map camera frame to screen coordinates
+      var screenX = eyeCenter.dx / data.image.width.toDouble();
+      var screenY = eyeCenter.dy / data.image.height.toDouble();
       
       // Apply head pose corrections
-      // When camera is at top of screen and user looks at center:
-      // - Head tilts DOWN (negative pitch ~-5° to -15°)
-      // - This makes eyes appear LOWER in frame
-      // - We need to SHIFT gaze UP on screen to compensate
-      
-      // Pitch correction: -1° pitch = looking ~10 pixels down on a 375pt iPhone screen
-      // That's about 0.027 in normalized coords per degree
-      final pitchCorrection = headPitch * -0.025; // Negative because pitch is inverted
+      final pitchCorrection = headPitch * -0.025;
       screenY += pitchCorrection;
       
-      // Yaw correction: turning head left/right
       final yawCorrection = headYaw * 0.015;
       screenX -= yawCorrection;
       
-      // Additional correction based on where eyes are in the face
-      // If eyes are in lower part of face box, user is looking down
+      // Eye position in face correction
+      final faceBox = face.boundingBox;
       final eyePositionInFace = (eyeCenter.dy - faceBox.top) / faceBox.height;
       if (eyePositionInFace > 0.4) {
-        // Eyes are lower in face -> looking down -> shift gaze up
         screenY -= (eyePositionInFace - 0.4) * 0.1;
       }
+      
+      // Apply drift correction
+      screenX += data.driftOffset.dx;
+      screenY += data.driftOffset.dy;
       
       // Clamp to valid range
       screenX = screenX.clamp(0.0, 1.0);
@@ -130,11 +151,11 @@ class EyeTrackingService {
       final normalizedGaze = Offset(screenX, screenY);
       
       // Calculate distance from gaze to target
-      final distance = _calculateDistance(normalizedGaze, targetPosition);
+      final distance = _calculateDistanceStatic(normalizedGaze, data.targetPosition);
       
       final gazePoint = GazePoint(
         eyePosition: normalizedGaze,
-        targetPosition: targetPosition,
+        targetPosition: data.targetPosition,
         timestamp: DateTime.now(),
         distance: distance,
         headPoseX: headPitch,
@@ -145,8 +166,160 @@ class EyeTrackingService {
       return gazePoint;
       
     } catch (e) {
-      print('Gaze tracking error: $e');
+      // Note: Can't use AppLogger in isolate, so we return null on error
+      return null;
+    } finally {
+      faceDetector.close();
+    }
+  }
+
+  // Static version of _convertCameraImage for background processing
+  static InputImage? _convertCameraImageStatic(CameraImage image, InputImageRotation rotation) {
+    try {
+      // Calculate total size and concatenate all planes
+      int totalSize = 0;
+      for (final plane in image.planes) {
+        totalSize += plane.bytes.length;
+      }
+      
+      final bytes = Uint8List(totalSize);
+      int offset = 0;
+      for (final plane in image.planes) {
+        bytes.setRange(offset, offset + plane.bytes.length, plane.bytes);
+        offset += plane.bytes.length;
+      }
+      
+      final imageSize = Size(image.width.toDouble(), image.height.toDouble());
+      
+      // Use actual image format instead of hardcoding
+      final inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw) 
+          ?? InputImageFormat.bgra8888; // fallback for iOS
+      
+      final inputImageMetadata = InputImageMetadata(
+        size: imageSize,
+        rotation: rotation,
+        format: inputImageFormat,
+        bytesPerRow: image.planes.first.bytesPerRow,
+      );
+      
+      return InputImage.fromBytes(
+        bytes: bytes,
+        metadata: inputImageMetadata,
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Static version of _calculateDistance for background processing
+  static double _calculateDistanceStatic(Offset p1, Offset p2) {
+    final dx = p1.dx - p2.dx;
+    final dy = p1.dy - p2.dy;
+    return math.sqrt(dx * dx + dy * dy);
+  }
+  
+  /// Set assessment active state for adaptive processing
+  void setAssessmentActive(bool active) {
+    _isAssessmentActive = active;
+  }
+  
+  /// Start collecting drift correction data
+  void startDriftCorrection() {
+    _isCollectingDriftData = true;
+    _driftSamples.clear();
+  }
+  
+  /// Finalize drift correction by calculating offset
+  void finalizeDriftCorrection() {
+    if (_driftSamples.isEmpty) {
+      _driftOffset = Offset.zero;
+    } else {
+      // Calculate mean offset from center (0.5, 0.5)
+      final meanX = _driftSamples.map((o) => o.dx).reduce((a, b) => a + b) / _driftSamples.length;
+      final meanY = _driftSamples.map((o) => o.dy).reduce((a, b) => a + b) / _driftSamples.length;
+      
+      // Drift offset is how far off from center the gaze was
+      _driftOffset = Offset(0.5 - meanX, 0.5 - meanY);
+      
+      AppLogger.logger.info('Drift correction: offset = (${_driftOffset.dx.toStringAsFixed(3)}, ${_driftOffset.dy.toStringAsFixed(3)})');
+    }
+    
+    _isCollectingDriftData = false;
+    _driftSamples.clear();
+  }
+  
+  /// Track user's gaze relative to target position
+  Future<GazePoint?> trackGaze(
+    CameraImage image,
+    Offset targetPosition,
+    Size screenSize,
+    InputImageRotation rotation,
+  ) async {
+    // Skip frames to reduce processing load
+    _frameCounter++;
+    
+    // If we're skipping this frame, return last result if it's recent
+    if (_frameCounter % _currentFrameSkipRate != 0) {
+      _lastResultAge++;
+      if (_lastGazePoint != null && _lastResultAge <= _maxResultAge) {
+        return _lastGazePoint!;
+      }
+      return null; // Skip this frame
+    }
+    
+    if (_isProcessing) {
+      _lastResultAge++;
+      if (_lastGazePoint != null && _lastResultAge <= _maxResultAge) {
+        return _lastGazePoint!;
+      }
+      return null;
+    }
+    
+    _isProcessing = true;
+    
+    try {
+      // Process image in background isolate to avoid blocking main thread
+      final processingData = _ProcessingData(
+        image: image,
+        targetPosition: targetPosition,
+        screenSize: screenSize,
+        driftOffset: _driftOffset,
+        isCollectingDriftData: _isCollectingDriftData,
+        rotation: rotation,
+      );
+      
+      //AppLogger.logger.fine('Starting background gaze processing');
+      final gazePoint = await compute(_processImageInBackground, processingData);
+      //AppLogger.logger.fine('Background gaze processing result: ${gazePoint != null ? 'success' : 'null'}');
+      
       _isProcessing = false;
+      
+      if (gazePoint == null) {
+        _lastResultAge++;
+        if (_lastGazePoint != null && _lastResultAge <= _maxResultAge) {
+          return _lastGazePoint!;
+        }
+        return null;
+      }
+      
+      // If collecting drift data, store raw gaze position
+      if (_isCollectingDriftData) {
+        _driftSamples.add(gazePoint.eyePosition);
+      }
+      
+      // Update stability tracking
+      _lastGazePoint = gazePoint;
+      _lastResultAge = 0;
+      
+      return gazePoint;
+      
+    } catch (e) {
+      AppLogger.logger.severe('Gaze tracking error: $e');
+      _isProcessing = false;
+      _lastResultAge++;
+      if (_lastGazePoint != null && _lastResultAge <= _maxResultAge) {
+        return _lastGazePoint!;
+      }
       return null;
     }
   }
@@ -156,6 +329,11 @@ class EyeTrackingService {
     _gazeData.add(point);
   }
   
+  /// Get all recorded gaze data
+  List<GazePoint> getGazeData() {
+    return List.from(_gazeData);
+  }
+  
   /// Calculate Euclidean distance between two points
   double _calculateDistance(Offset p1, Offset p2) {
     final dx = p1.dx - p2.dx;
@@ -163,7 +341,7 @@ class EyeTrackingService {
     return math.sqrt(dx * dx + dy * dy);
   }
   
-  /// Get fixation stability metrics (from research paper)
+  /// Get fixation stability metrics
   Map<String, dynamic> getFixationMetrics() {
     if (_gazeData.isEmpty) {
       return {
@@ -177,9 +355,9 @@ class EyeTrackingService {
     
     // Debug: print sample data
     if (_gazeData.length > 10) {
-      print('Sample gaze data (first 5 points):');
+      AppLogger.logger.fine('Sample gaze data (first 5 points):');
       for (int i = 0; i < math.min(5, _gazeData.length); i++) {
-        print('  Eye: (${_gazeData[i].eyePosition.dx.toStringAsFixed(3)}, ${_gazeData[i].eyePosition.dy.toStringAsFixed(3)}), '
+        AppLogger.logger.fine('  Eye: (${_gazeData[i].eyePosition.dx.toStringAsFixed(3)}, ${_gazeData[i].eyePosition.dy.toStringAsFixed(3)}), '
               'Target: (${_gazeData[i].targetPosition.dx.toStringAsFixed(3)}, ${_gazeData[i].targetPosition.dy.toStringAsFixed(3)}), '
               'Distance: ${_gazeData[i].distance.toStringAsFixed(3)}, '
               'Head Pitch: ${_gazeData[i].headPoseX.toStringAsFixed(1)}°');
@@ -198,7 +376,7 @@ class EyeTrackingService {
       }
     }
     
-    // Square wave jerks detection (simplified)
+    // Square wave jerks detection
     int squareWaveJerks = 0;
     for (int i = 2; i < _gazeData.length; i++) {
       final move1 = _calculateDistance(
@@ -221,7 +399,7 @@ class EyeTrackingService {
     // Maximum fixation duration
     double maxFixationDuration = 0.0;
     double currentFixationDuration = 0.0;
-    const fixationThreshold = 0.05; // Increased threshold for better tolerance
+    const fixationThreshold = 0.05;
     
     for (int i = 1; i < _gazeData.length; i++) {
       if (_gazeData[i].distance < fixationThreshold) {
@@ -235,7 +413,6 @@ class EyeTrackingService {
       }
     }
     
-    // Check final fixation
     if (currentFixationDuration > maxFixationDuration) {
       maxFixationDuration = currentFixationDuration;
     }
@@ -256,7 +433,7 @@ class EyeTrackingService {
     };
   }
   
-  /// Get pro-saccade metrics (from research paper)
+  /// Get pro-saccade metrics
   Map<String, dynamic> getProsaccadeMetrics() {
     if (_gazeData.isEmpty) {
       return {
@@ -284,7 +461,7 @@ class EyeTrackingService {
     double totalLatency = 0.0;
     double totalSaccades = 0.0;
     
-    const double TARGET_THRESHOLD = 0.10; // More relaxed - within 10% of screen
+    const double TARGET_THRESHOLD = 0.10;
     
     for (final trial in trials) {
       if (trial.isEmpty) continue;
@@ -299,11 +476,11 @@ class EyeTrackingService {
         final latency = firstReach.timestamp.difference(trial.first.timestamp).inMilliseconds;
         totalLatency += latency;
         
-        // Count saccades (significant movements)
+        // Count saccades
         int saccades = 0;
         for (int i = 1; i < trial.length; i++) {
           final movement = _calculateDistance(trial[i].eyePosition, trial[i - 1].eyePosition);
-          if (movement > 0.02) { // More relaxed saccade threshold
+          if (movement > 0.02) {
             saccades++;
           }
         }
@@ -315,7 +492,7 @@ class EyeTrackingService {
     final meanLatency = successfulTrials > 0 ? totalLatency / successfulTrials : 0.0;
     final meanSaccades = successfulTrials > 0 ? totalSaccades / successfulTrials : 0.0;
     
-    print('Pro-saccade debug: $successfulTrials successful out of ${trials.length} trials');
+    AppLogger.logger.info('Pro-saccade: $successfulTrials successful out of ${trials.length} trials');
     
     return {
       'accuracy': accuracy,
@@ -326,7 +503,7 @@ class EyeTrackingService {
     };
   }
   
-  /// Get smooth pursuit metrics (from research paper)
+  /// Get smooth pursuit metrics
   Map<String, dynamic> getSmoothPursuitMetrics() {
     if (_gazeData.length < 2) {
       return {
@@ -336,7 +513,6 @@ class EyeTrackingService {
       };
     }
     
-    // Calculate eye velocity and target velocity
     double totalEyeVelocity = 0.0;
     double totalTargetVelocity = 0.0;
     int pursuingCount = 0;
@@ -367,7 +543,7 @@ class EyeTrackingService {
         pursuingCount++;
       }
       
-      // Catch-up saccades (rapid movements when eye falls behind)
+      // Catch-up saccades
       if (eyeMovement > 0.03 && _gazeData[i].distance > 0.05) {
         catchUpSaccades++;
       }
@@ -389,39 +565,9 @@ class EyeTrackingService {
     _gazeData.clear();
   }
   
-  /// Convert CameraImage to InputImage
-  InputImage? _convertCameraImage(CameraImage image, InputImageRotation rotation) {
-    try {
-      final WriteBuffer allBytes = WriteBuffer();
-      for (final Plane plane in image.planes) {
-        allBytes.putUint8List(plane.bytes);
-      }
-      final bytes = allBytes.done().buffer.asUint8List();
-      
-      final imageSize = Size(image.width.toDouble(), image.height.toDouble());
-      
-      final inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw) 
-          ?? InputImageFormat.nv21;
-      
-      final inputImageMetadata = InputImageMetadata(
-        size: imageSize,
-        rotation: rotation,
-        format: inputImageFormat,
-        bytesPerRow: image.planes.first.bytesPerRow,
-      );
-      
-      return InputImage.fromBytes(
-        bytes: bytes,
-        metadata: inputImageMetadata,
-      );
-    } catch (e) {
-      print('Error converting camera image: $e');
-      return null;
-    }
-  }
-  
   void dispose() {
     _faceDetector.close();
     _gazeData.clear();
+    _driftSamples.clear();
   }
 }

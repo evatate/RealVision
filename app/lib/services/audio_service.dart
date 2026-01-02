@@ -1,6 +1,7 @@
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../utils/constants.dart';
+import '../utils/logger.dart';
 import 'dart:async';
 
 class AudioService {
@@ -17,15 +18,15 @@ class AudioService {
     try {
       bool available = await _speechToText.initialize(
         onError: (error) {
-          print('Speech init error: $error');
+          AppLogger.logger.warning('Speech init error: $error');
         },
         onStatus: (status) {
-          print('Speech status: $status');
+          AppLogger.logger.info('Speech status: $status');
         },
       );
       
       if (!available) {
-        print('Speech recognition not available');
+        AppLogger.logger.warning('Speech recognition not available');
       }
       
       // iOS-specific TTS configuration
@@ -46,7 +47,7 @@ class AudioService {
       
       _isInitialized = true;
     } catch (e) {
-      print('Audio service initialization error: $e');
+      AppLogger.logger.severe('Audio service initialization error: $e');
     }
   }
   
@@ -59,7 +60,7 @@ class AudioService {
       await _flutterTts.awaitSpeakCompletion(true);
       await _flutterTts.speak(text);
     } catch (e) {
-      print('TTS error: $e');
+      AppLogger.logger.severe('TTS error: $e');
     }
   }
   
@@ -103,7 +104,7 @@ class AudioService {
         ),
       );
     } catch (e) {
-      print('Listen error: $e');
+      AppLogger.logger.severe('Listen error: $e');
       _isListening = false;
       _keepAliveTimer?.cancel();
       onError?.call(e.toString());
@@ -119,7 +120,7 @@ class AudioService {
         return;
       }
       
-      print('Keep-alive: Restarting speech recognition...');
+      AppLogger.logger.info('Keep-alive: Restarting speech recognition...');
       
       try {
         // Stop current session
@@ -151,7 +152,7 @@ class AudioService {
           ),
         );
       } catch (e) {
-        print('Keep-alive restart error: $e');
+        AppLogger.logger.severe('Keep-alive restart error: $e');
         onError?.call(e.toString());
       }
     });

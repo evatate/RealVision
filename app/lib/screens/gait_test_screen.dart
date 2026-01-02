@@ -5,6 +5,7 @@ import '../services/motion_sensor_service.dart';
 import '../services/audio_service.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
+import '../utils/logger.dart';
 import '../widgets/breadcrumb.dart';
 import 'dart:async';
 import '../services/service_locator.dart';
@@ -93,15 +94,15 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
       'Walking test complete. You took ${gaitData['steps']} steps.'
     );
     
-    print('==== WALKING TEST RESULTS ====');
-    print('Steps: ${gaitData['steps']}');
-    print('Duration: ${gaitData['durationMinutes']} min');
-    print('Cadence: ${gaitData['cadence']} steps/min');
-    print('Avg Acceleration: ${gaitData['avgAcceleration']} m/s²');
-    print('Acceleration Variability: ${gaitData['accelerationVariability']}');
-    print('Rotation Rate: ${gaitData['rotationRate']} rad/s');
-    print('Data Source: ${gaitData['dataSource']}');
-    print('==============================');
+    AppLogger.logger.info('==== WALKING TEST RESULTS ====');
+    AppLogger.logger.info('Steps: ${gaitData['steps']}');
+    AppLogger.logger.info('Duration: ${gaitData['durationMinutes']} min');
+    AppLogger.logger.info('Cadence: ${gaitData['cadence']} steps/min');
+    AppLogger.logger.info('Avg Acceleration: ${gaitData['avgAcceleration']} m/s²');
+    AppLogger.logger.info('Acceleration Variability: ${gaitData['accelerationVariability']}');
+    AppLogger.logger.info('Rotation Rate: ${gaitData['rotationRate']} rad/s');
+    AppLogger.logger.info('Data Source: ${gaitData['dataSource']}');
+    AppLogger.logger.info('==============================');
     
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) Navigator.pop(context);

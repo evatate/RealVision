@@ -66,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         TestButton(
                           icon: Icons.directions_walk,
                           title: 'Walking Test',
-                          description: 'Step tracking (do first)',
+                          description: 'Step tracking',
                           completed: progress.gaitCompleted,
                           onPressed: () => _navigateToTest(
                             const GaitTestScreen(),

@@ -11,10 +11,10 @@ class AppConstants {
   static const int gaitTestDuration = 120;
   
   static const int prosaccadePracticeTrials = 4;
-  static const int prosaccadeTestTrials = 10; // 40 for production
+  static const int prosaccadeTestTrials = 40; 
   
   static const int smoothPursuitPracticeTrials = 2;
-  static const int smoothPursuitTestTrials = 6; // 12 for production
+  static const int smoothPursuitTestTrials = 12;
   
   // TTS settings (verty slow and loud)
   static const double speechRate = 0.5;
