@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/colors.dart';
 import '../services/service_locator.dart';
 import '../services/audio_service.dart';
+import '../services/aws_auth_service.dart';
 import 'home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -27,6 +28,15 @@ class _SplashScreenState extends State<SplashScreen> {
       await Future.delayed(Duration(milliseconds: 500));
       final audioService = getIt<AudioService>();
       await audioService.initialize();
+
+      setState(() => _statusMessage = 'Verifying authentication...');
+      await Future.delayed(Duration(milliseconds: 500));
+      final awsAuth = getIt<AWSAuthService>();
+      final userId = await awsAuth.getCurrentUserId();
+      
+      if (userId != null) {
+        print('User authenticated: $userId');
+      }
       
       setState(() {
         _isLoading = false;

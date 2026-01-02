@@ -5,11 +5,17 @@ import 'models/test_progress.dart';
 import 'utils/colors.dart';
 import '../services/service_locator.dart';
 import 'screens/splash_screen.dart';
+import 'services/aws_auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   setupServiceLocator();
+
+  /// Sign in user
+  final awsAuth = getIt<AWSAuthService>();
+  await awsAuth.initialize();
+  await awsAuth.signInAnonymously();
 
   runApp(
     ChangeNotifierProvider(

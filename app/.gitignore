@@ -25,6 +25,7 @@ pubspec.lock
 # could comment it out if we wantis commented out by default.
 .vscode/
 devtools_options.yaml
+.env
 
 # Flutter/Dart/Pub related
 **/doc/api/
