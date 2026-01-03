@@ -94,10 +94,10 @@ class AudioService {
         onResult: (result) {
           // Accumulate transcript
           if (result.finalResult) {
-            _accumulatedTranscript += ' ' + result.recognizedWords;
+            _accumulatedTranscript += ' ${result.recognizedWords}';
           }
           // Always send back accumulated + current partial
-          String currentTranscript = _accumulatedTranscript + ' ' + result.recognizedWords;
+          String currentTranscript = '$_accumulatedTranscript ${result.recognizedWords}';
           onResult(currentTranscript.trim());
         },
         listenFor: Platform.isAndroid ? Duration(seconds: 60) : Duration(seconds: 120), // Shorter for Android
@@ -146,9 +146,9 @@ class AudioService {
         await _speechToText.listen(
           onResult: (result) {
             if (result.finalResult) {
-              _accumulatedTranscript += ' ' + result.recognizedWords;
+              _accumulatedTranscript += ' ${result.recognizedWords}';
             }
-            String currentTranscript = _accumulatedTranscript + ' ' + result.recognizedWords;
+            String currentTranscript = '$_accumulatedTranscript ${result.recognizedWords}';
             onResult(currentTranscript.trim());
           },
           listenFor: Platform.isAndroid ? Duration(seconds: 60) : Duration(seconds: 120),

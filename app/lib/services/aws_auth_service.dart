@@ -203,17 +203,13 @@ class AWSAuthService {
     try {
       final session = await Amplify.Auth.fetchAuthSession() as CognitoAuthSession;
       
-      final accessToken = session.userPoolTokensResult.value?.accessToken.raw;
-      final idToken = session.userPoolTokensResult.value?.idToken.raw;
+      final accessToken = session.userPoolTokensResult.value.accessToken.raw;
+      final idToken = session.userPoolTokensResult.value.idToken.raw;
       
-      if (accessToken != null) {
-        return {
-          'Authorization': 'Bearer $accessToken',
-          'X-ID-Token': idToken ?? '',
-        };
-      }
-      
-      return {};
+      return {
+        'Authorization': 'Bearer $accessToken',
+        'X-ID-Token': idToken,
+      };
       
     } catch (e) {
       safePrint('Error getting auth headers: $e');

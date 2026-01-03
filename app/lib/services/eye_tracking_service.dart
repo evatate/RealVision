@@ -7,7 +7,6 @@ import 'dart:ui';
 import 'dart:math' as math;
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 
 class GazePoint {
   final Offset eyePosition;

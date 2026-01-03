@@ -11,7 +11,6 @@ class MotionSensorService {
   List<GyroscopeEvent> _gyroscopeData = [];
   
   int _stepCount = 0;
-  double _lastMagnitude = 0;
   bool _isPeakDetected = false;
   DateTime? _lastStepTime;
   
@@ -66,7 +65,6 @@ class MotionSensorService {
       _isPeakDetected = false;
     }
     
-    _lastMagnitude = magnitude;
   }
   
   /// Stop recording and get results

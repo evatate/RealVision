@@ -1,6 +1,7 @@
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 import 'dart:io' show Platform;
+import '../utils/logger.dart';
 
 class CameraService {
   CameraController? _controller;
@@ -38,7 +39,7 @@ class CameraService {
     _imageRotation = _rotationFromSensor(frontCamera.sensorOrientation);
     _isInitialized = true;
     
-    print('📷 Camera initialized: ${Platform.isAndroid ? "Android (NV21)" : "iOS (BGRA8888)"}');
+    AppLogger.logger.info('📷 Camera initialized: ${Platform.isAndroid ? "Android (NV21)" : "iOS (BGRA8888)"}');
   }
 
   InputImageRotation _rotationFromSensor(int sensorOrientation) {
