@@ -2,6 +2,7 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:camera/camera.dart';
 import 'dart:ui';
 import 'dart:typed_data';
+import 'dart:io' show Platform;
 import '../utils/logger.dart';
 
 class FaceDetectionService {
@@ -104,36 +105,49 @@ class FaceDetectionService {
     InputImageRotation rotation,
   ) {
     try {
-      // Calculate total size and concatenate all planes
-      int totalSize = 0;
-      for (final plane in image.planes) {
-        totalSize += plane.bytes.length;
-      }
-      
-      final bytes = Uint8List(totalSize);
-      int offset = 0;
-      for (final plane in image.planes) {
-        bytes.setRange(offset, offset + plane.bytes.length, plane.bytes);
-        offset += plane.bytes.length;
-      }
-      
       final imageSize = Size(image.width.toDouble(), image.height.toDouble());
       
-      // Use actual image format instead of hardcoding
-      final inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw) 
-          ?? InputImageFormat.bgra8888; // fallback for iOS
-      
-      final inputImageMetadata = InputImageMetadata(
-        size: imageSize,
-        rotation: rotation,
-        format: inputImageFormat,
-        bytesPerRow: image.planes.first.bytesPerRow,
-      );
-      
-      return InputImage.fromBytes(
-        bytes: bytes,
-        metadata: inputImageMetadata,
-      );
+      // Platform-specific handling
+      if (Platform.isAndroid) {
+        // Android uses NV21 format, pass planes directly
+        final inputImageData = InputImageMetadata(
+          size: imageSize,
+          rotation: rotation,
+          format: InputImageFormat.nv21,
+          bytesPerRow: image.planes[0].bytesPerRow,
+        );
+        
+        // For Android, use fromBytes with the Y plane
+        return InputImage.fromBytes(
+          bytes: image.planes[0].bytes,
+          metadata: inputImageData,
+        );
+      } else {
+        // iOS uses BGRA8888, concatenate planes
+        int totalSize = 0;
+        for (final plane in image.planes) {
+          totalSize += plane.bytes.length;
+        }
+        
+        final bytes = Uint8List(totalSize);
+        int offset = 0;
+        for (final plane in image.planes) {
+          bytes.setRange(offset, offset + plane.bytes.length, plane.bytes);
+          offset += plane.bytes.length;
+        }
+        
+        final inputImageData = InputImageMetadata(
+          size: imageSize,
+          rotation: rotation,
+          format: InputImageFormat.bgra8888,
+          bytesPerRow: image.planes.first.bytesPerRow,
+        );
+        
+        return InputImage.fromBytes(
+          bytes: bytes,
+          metadata: inputImageData,
+        );
+      }
     } catch (e) {
       AppLogger.logger.severe('Image conversion error: $e');
       return null;

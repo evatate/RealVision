@@ -44,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: AppConstants.buttonSpacing, vertical: 20),
+          padding: EdgeInsets.symmetric(horizontal: AppConstants.buttonSpacing, vertical: 16), // Reduced vertical padding
           child: Column(
             children: [
               Text(
@@ -55,80 +55,91 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: AppColors.textDark,
                 ),
               ),
-              SizedBox(height: 20),
+              SizedBox(height: 24), // Reduced spacing
               
               Expanded(
                 child: Consumer<TestProgress>(
                   builder: (context, progress, child) {
-                    return Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        TestButton(
-                          icon: Icons.directions_walk,
-                          title: 'Walking Test',
-                          description: 'Step tracking',
-                          completed: progress.gaitCompleted,
-                          onPressed: () => _navigateToTest(
-                            const GaitTestScreen(),
-                            'walking test',
-                          ),
-                        ),
-                        
-                        TestButton(
-                          icon: Icons.mic,
-                          title: 'Speech Test',
-                          description: 'Describe a picture',
-                          completed: progress.speechCompleted,
-                          onPressed: () => _navigateToTest(
-                            const SpeechTestScreen(),
-                            'speech test',
-                          ),
-                        ),
-                        
-                        TestButton(
-                          icon: Icons.remove_red_eye,
-                          title: 'Eye Tracking',
-                          description: 'Follow visual targets',
-                          completed: progress.eyeTrackingCompleted,
-                          onPressed: () => _navigateToTest(
-                            const EyeTrackingScreen(),
-                            'eye tracking test',
-                          ),
-                        ),
-                        
-                        TestButton(
-                          icon: Icons.sentiment_satisfied,
-                          title: 'Smile Test',
-                          description: 'Facial expression',
-                          completed: progress.smileCompleted,
-                          onPressed: () => _navigateToTest(
-                            const FacialExpressionScreen(),
-                            'smile test',
-                          ),
-                        ),
-                        
-                        SizedBox(height: 8),
-                        
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: progress.allTestsCompleted
-                                ? () {
-                                    _showResultsDialog(context, progress);
-                                  }
-                                : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.success,
-                              disabledBackgroundColor: AppColors.border,
-                              padding: EdgeInsets.all(18),
+                    return SingleChildScrollView( // Added scroll view for smaller screens
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            TestButton(
+                              icon: Icons.directions_walk,
+                              title: 'Walking Test',
+                              description: 'Step tracking',
+                              completed: progress.gaitCompleted,
+                              onPressed: () => _navigateToTest(
+                                const GaitTestScreen(),
+                                'walking test',
+                              ),
                             ),
-                            child: Text(
-                              'View Results',
-                              style: TextStyle(fontSize: 22, color: Colors.white),
+                            
+                            SizedBox(height: 40),
+                            
+                            TestButton(
+                              icon: Icons.mic,
+                              title: 'Speech Test',
+                              description: 'Describe a picture',
+                              completed: progress.speechCompleted,
+                              onPressed: () => _navigateToTest(
+                                const SpeechTestScreen(),
+                                'speech test',
+                              ),
                             ),
-                          ),
+                            
+                            SizedBox(height: 40),
+                            
+                            TestButton(
+                              icon: Icons.remove_red_eye,
+                              title: 'Eye Tracking',
+                              description: 'Follow visual targets',
+                              completed: progress.eyeTrackingCompleted,
+                              onPressed: () => _navigateToTest(
+                                const EyeTrackingScreen(),
+                                'eye tracking test',
+                              ),
+                            ),
+                            
+                            SizedBox(height: 40),
+                            
+                            TestButton(
+                              icon: Icons.sentiment_satisfied,
+                              title: 'Smile Test',
+                              description: 'Facial expression',
+                              completed: progress.smileCompleted,
+                              onPressed: () => _navigateToTest(
+                                const FacialExpressionScreen(),
+                                'smile test',
+                              ),
+                            ),
+                            
+                            SizedBox(height: 40),
+                            
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: progress.allTestsCompleted
+                                    ? () {
+                                        _showResultsDialog(context, progress);
+                                      }
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.success,
+                                  disabledBackgroundColor: AppColors.border,
+                                  padding: EdgeInsets.all(16), // Reduced padding
+                                ),
+                                child: Text(
+                                  'View Results',
+                                  style: TextStyle(fontSize: 20, color: Colors.white), // Reduced font size
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     );
                   },
                 ),

@@ -6,6 +6,7 @@ import '../utils/logger.dart';
 import 'dart:ui';
 import 'dart:math' as math;
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 
 class GazePoint {
@@ -237,35 +238,49 @@ class EyeTrackingService {
   /// Convert CameraImage to InputImage
   InputImage? _convertCameraImage(CameraImage image, InputImageRotation rotation) {
     try {
-      // Calculate total size and concatenate all planes
-      int totalSize = 0;
-      for (final plane in image.planes) {
-        totalSize += plane.bytes.length;
-      }
-      
-      final bytes = Uint8List(totalSize);
-      int offset = 0;
-      for (final plane in image.planes) {
-        bytes.setRange(offset, offset + plane.bytes.length, plane.bytes);
-        offset += plane.bytes.length;
-      }
-      
       final imageSize = Size(image.width.toDouble(), image.height.toDouble());
       
-      final inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw) 
-          ?? InputImageFormat.bgra8888;
-      
-      final inputImageMetadata = InputImageMetadata(
-        size: imageSize,
-        rotation: rotation,
-        format: inputImageFormat,
-        bytesPerRow: image.planes.first.bytesPerRow,
-      );
-      
-      return InputImage.fromBytes(
-        bytes: bytes,
-        metadata: inputImageMetadata,
-      );
+      // Platform-specific handling
+      if (Platform.isAndroid) {
+        // Android uses NV21 format, pass planes directly
+        final inputImageData = InputImageMetadata(
+          size: imageSize,
+          rotation: rotation,
+          format: InputImageFormat.nv21,
+          bytesPerRow: image.planes[0].bytesPerRow,
+        );
+        
+        // For Android, use fromBytes with the Y plane
+        return InputImage.fromBytes(
+          bytes: image.planes[0].bytes,
+          metadata: inputImageData,
+        );
+      } else {
+        // iOS uses BGRA8888, concatenate planes
+        int totalSize = 0;
+        for (final plane in image.planes) {
+          totalSize += plane.bytes.length;
+        }
+        
+        final bytes = Uint8List(totalSize);
+        int offset = 0;
+        for (final plane in image.planes) {
+          bytes.setRange(offset, offset + plane.bytes.length, plane.bytes);
+          offset += plane.bytes.length;
+        }
+        
+        final inputImageData = InputImageMetadata(
+          size: imageSize,
+          rotation: rotation,
+          format: InputImageFormat.bgra8888,
+          bytesPerRow: image.planes.first.bytesPerRow,
+        );
+        
+        return InputImage.fromBytes(
+          bytes: bytes,
+          metadata: inputImageData,
+        );
+      }
     } catch (e) {
       AppLogger.logger.severe('Error converting camera image: $e');
       return null;
@@ -315,7 +330,7 @@ class EyeTrackingService {
     
     double maxFixationDuration = 0.0;
     double currentFixationDuration = 0.0;
-    const fixationThreshold = 0.25; // Increased from 0.15 to be more lenient
+    const fixationThreshold = 0.25;
     
     for (int i = 1; i < _gazeData.length; i++) {
       if (_gazeData[i].distance < fixationThreshold) {
@@ -333,7 +348,6 @@ class EyeTrackingService {
       maxFixationDuration = currentFixationDuration;
     }
     
-    // Convert milliseconds to seconds
     maxFixationDuration = maxFixationDuration / 1000.0;
     
     final distances = _gazeData.map((p) => p.distance).toList();
@@ -363,17 +377,14 @@ class EyeTrackingService {
     final trials = <List<GazePoint>>[];
     List<GazePoint> currentTrial = [_gazeData[0]];
     
-    // Group data by trials - detect when target moves to peripheral position
     for (int i = 1; i < _gazeData.length; i++) {
       final currentTarget = _gazeData[i].targetPosition;
       final prevTarget = _gazeData[i - 1].targetPosition;
       
-      // Check if this is a transition to peripheral target (away from center)
       final isCenterPrev = _calculateDistance(prevTarget, const Offset(0.5, 0.5)) < 0.01;
       final isPeripheralCurrent = _calculateDistance(currentTarget, const Offset(0.5, 0.5)) > 0.1;
       
       if (isCenterPrev && isPeripheralCurrent) {
-        // Start new trial when peripheral target appears
         if (currentTrial.isNotEmpty) {
           trials.add(currentTrial);
         }
@@ -390,15 +401,13 @@ class EyeTrackingService {
     double totalLatency = 0.0;
     double totalSaccades = 0.0;
     
-    const double TARGET_THRESHOLD = 0.15; // Increased threshold for success
+    const double TARGET_THRESHOLD = 0.15;
     
     for (final trial in trials) {
       if (trial.isEmpty) continue;
       
-      // Find when peripheral target appeared (first point in trial)
       final targetOnset = trial.first.timestamp;
       
-      // Check if gaze reached target within reasonable time
       final reachedPoints = trial.where((p) => p.distance < TARGET_THRESHOLD).toList();
       if (reachedPoints.isNotEmpty) {
         successfulTrials++;
@@ -406,7 +415,6 @@ class EyeTrackingService {
         final firstReach = reachedPoints.first;
         final latency = firstReach.timestamp.difference(targetOnset).inMilliseconds;
         
-        // Only count reasonable latencies (under 1 second)
         if (latency > 0 && latency < 1000) {
           totalLatency += latency;
         }
@@ -414,7 +422,7 @@ class EyeTrackingService {
         int saccades = 0;
         for (int i = 1; i < trial.length; i++) {
           final movement = _calculateDistance(trial[i].eyePosition, trial[i - 1].eyePosition);
-          if (movement > 0.03) { // Increased threshold for saccade detection
+          if (movement > 0.03) {
             saccades++;
           }
         }
@@ -445,61 +453,46 @@ class EyeTrackingService {
       };
     }
 
-    // For smooth pursuit, analyze the sinusoidal target movement
-    // Target moves as: position = 0.5 + 0.2 * sin(2π * f * t)
-    // Velocity = 0.2 * 2π * f * cos(2π * f * t)
-
     double totalGain = 0.0;
     int gainSamples = 0;
     int pursuingCount = 0;
     int catchUpSaccades = 0;
     int totalSamples = 0;
 
-    // Assume frequency based on trial pattern (0.25 or 0.5 Hz)
-    // We'll estimate it from the data or use a reasonable default
-    const double assumedFrequency = 0.375; // Average of 0.25 and 0.5
+    const double assumedFrequency = 0.375;
     const double amplitude = 0.2;
-    const double maxTargetVelocity = amplitude * 2 * math.pi * assumedFrequency;
 
     for (int i = 2; i < _gazeData.length; i++) {
       final timeDiff = _gazeData[i].timestamp.difference(_gazeData[i - 1].timestamp).inMilliseconds / 1000.0;
-      if (timeDiff <= 0 || timeDiff > 0.1) continue; // Skip invalid or large time gaps
+      if (timeDiff <= 0 || timeDiff > 0.1) continue;
 
       totalSamples++;
 
-      // Calculate eye velocity (smoothed over 3 points for stability)
       final eyeMovement1 = _calculateDistance(_gazeData[i].eyePosition, _gazeData[i - 1].eyePosition);
       final eyeMovement2 = _calculateDistance(_gazeData[i - 1].eyePosition, _gazeData[i - 2].eyePosition);
       final eyeVelocity = (eyeMovement1 + eyeMovement2) / (2 * timeDiff);
 
-      // Calculate target velocity based on sinusoidal movement
-      // For position = 0.5 + A * sin(ωt), velocity = A * ω * cos(ωt)
-      final targetPos = _gazeData[i].targetPosition.dx; // Assume horizontal for now
-      final normalizedPos = (targetPos - 0.5) / amplitude; // Should be between -1 and 1
+      final targetPos = _gazeData[i].targetPosition.dx;
+      final normalizedPos = (targetPos - 0.5) / amplitude;
 
-      if (normalizedPos.abs() <= 1.0) { // Valid sinusoidal position
-        final cosValue = math.sqrt(1 - normalizedPos * normalizedPos); // cos(arcsin(x)) = sqrt(1-x²)
+      if (normalizedPos.abs() <= 1.0) {
+        final cosValue = math.sqrt(1 - normalizedPos * normalizedPos);
         final targetVelocity = amplitude * 2 * math.pi * assumedFrequency * cosValue;
 
-        if (targetVelocity > 0.01) { // Target is moving significantly
-          // Calculate gain (eye velocity / target velocity)
+        if (targetVelocity > 0.01) {
           final gain = eyeVelocity / targetVelocity;
 
-          // Only count reasonable gains (filter out noise and saccades)
           if (gain > 0.1 && gain < 3.0) {
             totalGain += gain;
             gainSamples++;
           }
 
-          // Count as pursuing if eye velocity is at least 20% of target velocity
-          // and the eye is reasonably close to the target
           if (eyeVelocity > 0.2 * targetVelocity && _gazeData[i].distance < 0.15) {
             pursuingCount++;
           }
         }
       }
 
-      // Detect catch-up saccades: large eye movements when far from target
       final eyeMovement = _calculateDistance(_gazeData[i].eyePosition, _gazeData[i - 1].eyePosition);
       if (eyeMovement > 0.03 && _gazeData[i].distance > 0.1) {
         catchUpSaccades++;

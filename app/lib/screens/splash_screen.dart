@@ -5,6 +5,7 @@ import '../services/audio_service.dart';
 import '../services/aws_auth_service.dart';
 import '../utils/logger.dart';
 import 'home_screen.dart';
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -15,6 +16,8 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> {
   bool _isLoading = true;
   String _statusMessage = 'Initializing...';
+
+  bool _instructionsSpoken = false;
 
   @override
   void initState() {
@@ -67,6 +70,18 @@ class _SplashScreenState extends State<SplashScreen> {
         _isLoading = false;
         _statusMessage = 'Ready (some services unavailable)';
       });
+    }
+
+    final audioService = getIt<AudioService>();
+    if (mounted && !_instructionsSpoken) {
+      _instructionsSpoken = true;
+      await audioService.speak(
+        'Complete all four tests. '
+        'Start with the walking test. '
+        'Find a quiet, well lit space. '
+        'Follow the audio instructions. '
+        'Press Start Assessment to begin.'
+      );
     }
   }
 

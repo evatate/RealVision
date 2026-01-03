@@ -44,7 +44,6 @@ class AWSAuthService {
   }
   
   /// Check if user is already signed in, if not create synthetic account
-  /// Only call this ONCE at app startup
   Future<String?> ensureSignedIn() async {
     try {
       // First check if already signed in with Amplify

@@ -1,5 +1,6 @@
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_commons/google_mlkit_commons.dart';
+import 'dart:io' show Platform;
 
 class CameraService {
   CameraController? _controller;
@@ -7,7 +8,7 @@ class CameraService {
   InputImageRotation? _imageRotation;
   bool _isInitialized = false;
   
-    Future<void> initialize() async {
+  Future<void> initialize() async {
     if (_isInitialized) return; // Already initialized
     
     _cameras = await availableCameras();
@@ -21,32 +22,53 @@ class CameraService {
       orElse: () => _cameras!.first,
     );
     
+    // Choose image format based on platform
+    final imageFormatGroup = Platform.isAndroid 
+        ? ImageFormatGroup.nv21      // Android uses NV21
+        : ImageFormatGroup.bgra8888;  // iOS uses BGRA8888
+    
     _controller = CameraController(
       frontCamera,
       ResolutionPreset.medium,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.bgra8888,
+      imageFormatGroup: imageFormatGroup,
     );
     
     await _controller!.initialize();
-
     _imageRotation = _rotationFromSensor(frontCamera.sensorOrientation);
     _isInitialized = true;
+    
+    print('📷 Camera initialized: ${Platform.isAndroid ? "Android (NV21)" : "iOS (BGRA8888)"}');
   }
 
-  InputImageRotation _rotationFromSensor(int sensorOrientation) { 
-    switch (sensorOrientation) {
-      case 90:
-        return InputImageRotation.rotation90deg;
-      case 180:
-        return InputImageRotation.rotation180deg;
-      case 270:
-        return InputImageRotation.rotation270deg;
-      default:
-        return InputImageRotation.rotation0deg;
+  InputImageRotation _rotationFromSensor(int sensorOrientation) {
+    // Android and iOS handle rotation differently
+    if (Platform.isAndroid) {
+      // Android front camera
+      switch (sensorOrientation) {
+        case 90:
+          return InputImageRotation.rotation90deg;
+        case 180:
+          return InputImageRotation.rotation180deg;
+        case 270:
+          return InputImageRotation.rotation270deg;
+        default:
+          return InputImageRotation.rotation0deg;
+      }
+    } else {
+      // iOS front camera - typically 270 degrees
+      switch (sensorOrientation) {
+        case 90:
+          return InputImageRotation.rotation90deg;
+        case 180:
+          return InputImageRotation.rotation180deg;
+        case 270:
+          return InputImageRotation.rotation270deg;
+        default:
+          return InputImageRotation.rotation0deg;
+      }
     }
   }
-
   
   CameraController? get controller => _controller;
   
@@ -58,7 +80,7 @@ class CameraService {
   }
 
   Future<void> startImageStream(
-  Function(CameraImage image, InputImageRotation rotation) onImage,
+    Function(CameraImage image, InputImageRotation rotation) onImage,
   ) async {
     if (_controller == null || !_controller!.value.isInitialized || _imageRotation == null) {
       throw Exception('Camera not initialized');
@@ -67,7 +89,6 @@ class CameraService {
       onImage(image, _imageRotation!);
     });
   }
-
   
   Future<void> stopImageStream() async {
     if (_controller != null && _controller!.value.isStreamingImages) {

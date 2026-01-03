@@ -3,6 +3,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import '../utils/constants.dart';
 import '../utils/logger.dart';
 import 'dart:async';
+import 'dart:io' show Platform;
 
 class AudioService {
   final SpeechToText _speechToText = SpeechToText();
@@ -29,21 +30,26 @@ class AudioService {
         AppLogger.logger.warning('Speech recognition not available');
       }
       
-      // iOS-specific TTS configuration
+      // Platform-specific TTS configuration
       await _flutterTts.setLanguage('en-US');
       await _flutterTts.setSpeechRate(AppConstants.speechRate);
       await _flutterTts.setVolume(AppConstants.speechVolume);
       await _flutterTts.setPitch(AppConstants.speechPitch);
       
-      // iOS-specific settings
-      await _flutterTts.setIosAudioCategory(
-        IosTextToSpeechAudioCategory.playback,
-        [
-          IosTextToSpeechAudioCategoryOptions.mixWithOthers,
-          IosTextToSpeechAudioCategoryOptions.duckOthers,
-        ],
-        IosTextToSpeechAudioMode.defaultMode,
-      );
+      if (Platform.isIOS) {
+        // iOS-specific settings
+        await _flutterTts.setIosAudioCategory(
+          IosTextToSpeechAudioCategory.playback,
+          [
+            IosTextToSpeechAudioCategoryOptions.mixWithOthers,
+            IosTextToSpeechAudioCategoryOptions.duckOthers,
+          ],
+          IosTextToSpeechAudioMode.defaultMode,
+        );
+      } else if (Platform.isAndroid) {
+        // Android-specific settings to prevent audio focus issues
+        await _flutterTts.setVoice({"name": "en-us-x-sfg#male_1-local", "locale": "en-US"});
+      }
       
       _isInitialized = true;
     } catch (e) {
@@ -94,13 +100,13 @@ class AudioService {
           String currentTranscript = _accumulatedTranscript + ' ' + result.recognizedWords;
           onResult(currentTranscript.trim());
         },
-        listenFor: Duration(seconds: 120), // 2 minutes max per session
-        pauseFor: Duration(seconds: 30),   // Very long pause tolerance
+        listenFor: Platform.isAndroid ? Duration(seconds: 60) : Duration(seconds: 120), // Shorter for Android
+        pauseFor: Platform.isAndroid ? Duration(seconds: 45) : Duration(seconds: 30),   // Even more pause tolerance for Android
         localeId: 'en_US',
         listenOptions: SpeechListenOptions(
           partialResults: true,
-          onDevice: false,
-          listenMode: ListenMode.confirmation,
+          onDevice: Platform.isAndroid, // Use on-device for Android to avoid network timeouts
+          listenMode: Platform.isAndroid ? ListenMode.dictation : ListenMode.confirmation, // Dictation for Android
         ),
       );
     } catch (e) {
@@ -112,9 +118,12 @@ class AudioService {
   }
   
   void _startKeepAlive(Function(String) onResult, Function(String)? onError) {
-    // Restart listening every 90 seconds to prevent timeout
+    // Platform-specific keep-alive timing
+    int keepAliveSeconds = Platform.isAndroid ? 90 : 90; // Less frequent restarts for Android
+    
+    // Restart listening periodically to prevent timeout
     _keepAliveTimer?.cancel();
-    _keepAliveTimer = Timer.periodic(Duration(seconds: 90), (timer) async {
+    _keepAliveTimer = Timer.periodic(Duration(seconds: keepAliveSeconds), (timer) async {
       if (!_isListening) {
         timer.cancel();
         return;
@@ -142,13 +151,13 @@ class AudioService {
             String currentTranscript = _accumulatedTranscript + ' ' + result.recognizedWords;
             onResult(currentTranscript.trim());
           },
-          listenFor: Duration(seconds: 120),
-          pauseFor: Duration(seconds: 30),
+          listenFor: Platform.isAndroid ? Duration(seconds: 60) : Duration(seconds: 120),
+          pauseFor: Platform.isAndroid ? Duration(seconds: 15) : Duration(seconds: 30),
           localeId: 'en_US',
           listenOptions: SpeechListenOptions(
             partialResults: true,
-            onDevice: false,
-            listenMode: ListenMode.confirmation,
+            onDevice: Platform.isAndroid,
+            listenMode: Platform.isAndroid ? ListenMode.dictation : ListenMode.confirmation,
           ),
         );
       } catch (e) {

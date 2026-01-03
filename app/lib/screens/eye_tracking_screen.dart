@@ -43,10 +43,9 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   bool _isDriftCorrecting = false;
   List<int> _prosaccadeSequence = [];
   int _prosaccadeIndex = 0;
-  bool _trialNeedsRepeat = false;
   List<double> _trialQualityScores = [];
   Size _screenSize = Size.zero;
-  bool _isProcessingFrame = false; // Flag to prevent overlapping frame processing
+  bool _isProcessingFrame = false;
 
   @override
   void initState() {
@@ -145,19 +144,15 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
 
   // Check trial quality
   bool _checkTrialQuality(List<GazePoint> trialData) {
-    if (trialData.length < 5) return false; // Reduced from 10 - just need some data
-    
-    // For eye tracking tests, we don't need perfect gaze accuracy
-    // We just need consistent relative movement for:
-    // - saccade counting, fixation duration, pursuit consistency
+    if (trialData.length < 5) return false;
     
     // Calculate percentage of valid gaze points (face detected)
     final validPoints = trialData.length;
-    const requiredPoints = 5; // Reduced from 10
+    const requiredPoints = 5;
     
     if (validPoints < requiredPoints) return false;
     
-    // Check if user was looking roughly near targets (relaxed requirement)
+    // Check if user was looking roughly near targets
     final meanDistance = trialData.map((p) => p.distance).reduce((a, b) => a + b) / trialData.length;
     
     // Store quality score
@@ -201,24 +196,13 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Great job! You can now return to the home screen or continue with other tests.',
+              'Great! Remember: Complete all 3 tests.',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 20,
                 color: AppColors.textDark,
               ),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: 24),
-            if (testType != 'all')
-              Text(
-                'Remember: Complete all 3 eye tracking tests for full assessment.',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.blue[700],
-                  fontStyle: FontStyle.italic,
-                ),
-                textAlign: TextAlign.center,
-              ),
           ],
         ),
         actions: [
@@ -249,7 +233,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
                 padding: EdgeInsets.all(16),
               ),
               child: Text(
-                testType == 'all' ? 'Return to Home Screen' : 'Continue with Next Test',
+                testType == 'all' ? 'Return to Test Screen' : 'Continue with Next Test',
                 style: TextStyle(fontSize: 18, color: Colors.white),
                 textAlign: TextAlign.center,
               ),
@@ -783,7 +767,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             ),
           ),
           
-          SizedBox(height: AppConstants.buttonSpacing * 2),
+          SizedBox(height: AppConstants.buttonSpacing),
           
           _buildTaskButtonWithStatus(
             'Fixation Stability Test', 
