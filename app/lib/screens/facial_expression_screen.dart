@@ -312,7 +312,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
       padding: EdgeInsets.all(16),
       child: Column(
         children: [
-          // Camera - 60% of space
+          // Camera, 60% of space
           Expanded(
             flex: 60,
             child: _cameraInitialized && _cameraService.controller != null
@@ -355,10 +355,9 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
                   ),
           ),
           
-          // Smaller spacing
           Spacer(flex: 2),
           
-          // Emoji - LARGER
+          // Emoji
           Text(
             _getPhaseEmoji(),
             style: const TextStyle(fontSize: 56),

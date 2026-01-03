@@ -15,10 +15,9 @@ void main() async {
 
   setupServiceLocator();
 
-  /// Sign in user
+  /// Initialize user authentication service
   final awsAuth = getIt<AWSAuthService>();
   await awsAuth.initialize();
-  //await awsAuth.signInAnonymously();
 
   runApp(
     ChangeNotifierProvider(

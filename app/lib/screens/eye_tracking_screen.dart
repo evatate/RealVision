@@ -46,6 +46,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   bool _trialNeedsRepeat = false;
   List<double> _trialQualityScores = [];
   Size _screenSize = Size.zero;
+  bool _isProcessingFrame = false; // Flag to prevent overlapping frame processing
 
   @override
   void initState() {
@@ -58,10 +59,14 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   Future<void> _initializeServices() async {
     try {
       await _audioService.initialize();
+      // Initialize camera once and reuse it
+      await _cameraService.initialize();
+      if (mounted) {
+        setState(() => _cameraInitialized = true);
+      }
     } catch (e) {
-      AppLogger.logger.severe('Audio init error: $e');
+      AppLogger.logger.severe('Service init error: $e');
     }
-    if (mounted) setState(() {});
   }
 
   @override
@@ -116,6 +121,8 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
 
   // Drift correction before each trial
   Future<void> _performDriftCorrection() async {
+    final originalTask = _currentTask; // Save current task
+    
     setState(() {
       _isDriftCorrecting = true;
       _currentTask = EyeTrackingTask.driftCorrection;
@@ -130,27 +137,150 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     await Future.delayed(const Duration(seconds: 2));
     _eyeTrackingService.finalizeDriftCorrection();
     
-    setState(() => _isDriftCorrecting = false);
+    setState(() {
+      _isDriftCorrecting = false;
+      _currentTask = originalTask; // Restore original task
+    });
   }
 
   // Check trial quality
   bool _checkTrialQuality(List<GazePoint> trialData) {
-    if (trialData.length < 10) return false; // Not enough data
+    if (trialData.length < 5) return false; // Reduced from 10 - just need some data
+    
+    // For eye tracking tests, we don't need perfect gaze accuracy
+    // We just need consistent relative movement for:
+    // - saccade counting, fixation duration, pursuit consistency
     
     // Calculate percentage of valid gaze points (face detected)
     final validPoints = trialData.length;
-    const requiredPoints = 10; // At least 10 valid points per trial
+    const requiredPoints = 5; // Reduced from 10
     
     if (validPoints < requiredPoints) return false;
     
-    // Check if user was looking near targets
+    // Check if user was looking roughly near targets (relaxed requirement)
     final meanDistance = trialData.map((p) => p.distance).reduce((a, b) => a + b) / trialData.length;
     
     // Store quality score
     _trialQualityScores.add(1.0 - meanDistance);
     
-    // Trial passes if mean distance < 0.15 (within ~8° visual angle)
-    return meanDistance < 0.15;
+    // Different thresholds for different tasks
+    double threshold;
+    switch (_currentTask) {
+      case EyeTrackingTask.prosaccade:
+        threshold = 0.4;
+        break;
+      case EyeTrackingTask.pursuit:
+        threshold = 0.4;
+        break;
+      default:
+        threshold = 0.25;
+    }
+    
+    // Trial passes if mean distance < threshold
+    return meanDistance < threshold;
+  }
+
+  void _showTestCompletionDialog(String title, String testType) {
+    _audioService.speak(testType == 'all' ? 'All eye tracking tests finished!' : '$testType test complete');
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: Text(
+          title,
+          style: TextStyle(
+            fontSize: 24,
+            color: AppColors.textDark,
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Great job! You can now return to the home screen or continue with other tests.',
+              style: TextStyle(
+                fontSize: 18,
+                color: AppColors.textDark,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 24),
+            if (testType != 'all')
+              Text(
+                'Remember: Complete all 3 eye tracking tests for full assessment.',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.blue[700],
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
+              ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+                // Start the next test in sequence
+                if (testType == 'fixation') {
+                  _startProsaccadeTest();
+                } else if (testType == 'prosaccade') {
+                  _startSmoothPursuitTest();
+                } else if (testType == 'all') {
+                  // Return to main home screen
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                } else {
+                  // For any other case, return to test selection
+                  setState(() {
+                    _currentTask = EyeTrackingTask.none;
+                    _trialNumber = 0;
+                  });
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.all(16),
+              ),
+              child: Text(
+                testType == 'all' ? 'Return to Home Screen' : 'Continue with Next Test',
+                style: TextStyle(fontSize: 18, color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+          SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                // Return to test selection screen
+                setState(() {
+                  _currentTask = EyeTrackingTask.none;
+                  _trialNumber = 0;
+                });
+              },
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: AppColors.primary, width: 2),
+                padding: EdgeInsets.all(16),
+              ),
+              child: Text(
+                'Return to Eye Tracking Tests',
+                style: TextStyle(fontSize: 18, color: AppColors.primary),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showInstructions(String title, String instruction, VoidCallback onStart) {
@@ -161,7 +291,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         backgroundColor: AppColors.cardBackground,
         title: Text(
           title,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 28,
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
@@ -172,15 +302,15 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
           children: [
             Text(
               instruction,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 22,
                 color: AppColors.textDark,
               ),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: 24),
+            const SizedBox(height: 24),
             Container(
-              padding: EdgeInsets.all(12),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.blue[50],
                 borderRadius: BorderRadius.circular(8),
@@ -189,7 +319,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
               child: Text(
                 'Starting with practice round...',
                 style: TextStyle(
-                  fontSize: 20, 
+                  fontSize: 20,
                   fontStyle: FontStyle.italic,
                   color: Colors.blue[900],
                   fontWeight: FontWeight.w500,
@@ -209,9 +339,9 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
               ),
-              child: Text(
+              child: const Text(
                 'Start',
                 style: TextStyle(fontSize: 24, color: Colors.white),
               ),
@@ -228,7 +358,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
       'Look closely at the red cross without blinking for 10 seconds',
       () async {
         try {
-          await _cameraService.initialize();
           if (!mounted) return;
           
           await Future.delayed(const Duration(milliseconds: 500));
@@ -237,7 +366,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             _currentTask = EyeTrackingTask.fixation;
             _isPractice = true;
             _trialNumber = 0;
-            _cameraInitialized = true;
             _showTarget = true;
             _targetPosition = const Offset(0.5, 0.5);
             _trialQualityScores = [];
@@ -261,6 +389,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     
     _eyeTrackingTimer?.cancel();
     _cameraService.stopImageStream();
+    _isProcessingFrame = false; // Reset processing flag
   }
 
   void _startEyeTracking() {
@@ -268,23 +397,31 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     _eyeTrackingService.setAssessmentActive(true);
     
     _cameraService.startImageStream((CameraImage image, InputImageRotation rotation) async {
-      if (!mounted || _targetPosition == null) return;
+      if (!mounted || _targetPosition == null || _isProcessingFrame) return;
       
-      // First check if face is detected using the reliable face detection service
-      final faceResult = await _faceDetector.detectFace(image, rotation);
-      final faceDetected = faceResult.faceDetected;
+      // Set processing flag to prevent overlapping frame processing
+      _isProcessingFrame = true;
       
-      AppLogger.logger.fine('Face detection result: faceDetected=$faceDetected');
-      
-      setState(() => _isFaceDetected = faceDetected);
-      
-      if (faceDetected) {
-        // Only attempt eye tracking if face is detected
-        final result = await _eyeTrackingService.trackGaze(image, _targetPosition!, _screenSize, rotation);
-        AppLogger.logger.fine('Eye tracking result: ${result != null ? 'success' : 'failed'}');
-        if (result != null) {
-          _eyeTrackingService.recordGazePoint(result);
+      try {
+        // First check if face is detected using the reliable face detection service
+        final faceResult = await _faceDetector.detectFace(image, rotation);
+        final faceDetected = faceResult.faceDetected;
+        
+        AppLogger.logger.fine('Face detection result: faceDetected=$faceDetected');
+        
+        setState(() => _isFaceDetected = faceDetected);
+        
+        if (faceDetected) {
+          // Only attempt eye tracking if face is detected
+          final result = await _eyeTrackingService.trackGaze(image, _targetPosition!, _screenSize, rotation);
+          AppLogger.logger.fine('Eye tracking result: ${result != null ? 'success' : 'failed'}');
+          if (result != null) {
+            _eyeTrackingService.recordGazePoint(result);
+          }
         }
+      } finally {
+        // Always reset the processing flag
+        _isProcessingFrame = false;
       }
     });
   }
@@ -352,16 +489,8 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     _eyeTrackingService.clearData();
     
     Provider.of<TestProgress>(context, listen: false).markFixationCompleted();
-    _audioService.speak('Fixation test complete');
     
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          _currentTask = EyeTrackingTask.none;
-          _trialNumber = 0;
-        });
-      }
-    });
+    _showTestCompletionDialog('Fixation Stability Test Complete!', 'fixation');
   }
 
   Future<void> _startProsaccadeTest() async {
@@ -370,7 +499,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
       'Look at the target circle as quickly as possible when it appears',
       () async {
         try {
-          await _cameraService.initialize();
           if (!mounted) return;
           
           // Generate randomized sequence for 40 trials
@@ -380,7 +508,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             _currentTask = EyeTrackingTask.prosaccade;
             _isPractice = true;
             _trialNumber = 0;
-            _cameraInitialized = true;
             _trialQualityScores = [];
           });
           
@@ -423,16 +550,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         
         Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
         
-        _audioService.speak('Pro-saccade test complete');
-
-        Future.delayed(const Duration(seconds: 3), () {
-          if (mounted) {
-            setState(() {
-              _currentTask = EyeTrackingTask.none;
-              _trialNumber = 0;
-            });
-          }
-        });
+        _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
       }
       return;
     }
@@ -448,9 +566,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     
     Future.delayed(Duration(milliseconds: fixationDuration), () {
       if (!mounted || _currentTask != EyeTrackingTask.prosaccade) return;
-      
-      // Clear trial data
-      _eyeTrackingService.clearData();
       
       // GAP period: 200ms blank screen
       setState(() => _showTarget = false);
@@ -506,14 +621,12 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
       'Follow the red circle with your eyes as closely as possible',
       () async {
         try {
-          await _cameraService.initialize();
           if (!mounted) return;
           
           setState(() {
             _currentTask = EyeTrackingTask.pursuit;
             _isPractice = true;
             _trialNumber = 0;
-            _cameraInitialized = true;
             _trialQualityScores = [];
           });
           
@@ -555,16 +668,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         
         Provider.of<TestProgress>(context, listen: false).markPursuitCompleted();
         
-        _audioService.speak('Smooth pursuit test complete. All eye tracking tests finished!');
-        
-        Future.delayed(const Duration(seconds: 8), () {
-          if (mounted) {
-            setState(() {
-              _currentTask = EyeTrackingTask.none;
-              _trialNumber = 0;
-            });
-          }
-        });
+        _showTestCompletionDialog('All Eye Tracking Tests Complete!', 'all');
       }
       return;
     }
@@ -786,6 +890,34 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             ),
           ),
         
+        // Home button during tests
+        Positioned(
+          top: 16,
+          left: 16,
+          child: GestureDetector(
+            onTap: () {
+              _stopEyeTracking();
+              setState(() {
+                _currentTask = EyeTrackingTask.none;
+                _trialNumber = 0;
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child: const Icon(
+                Icons.home,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+          ),
+        ),
+        
         if (!_isFaceDetected && !_isDriftCorrecting)
           Positioned(
             top: 100,
@@ -825,7 +957,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
                   border: Border.all(color: Colors.white, width: 2),
                 ),
                 child: Text(
-                  'Drift Correction - Look at Center',
+                  'Look at the Center',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 20,

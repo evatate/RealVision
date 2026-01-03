@@ -3,8 +3,8 @@ import '../utils/colors.dart';
 import '../services/service_locator.dart';
 import '../services/audio_service.dart';
 import '../services/aws_auth_service.dart';
+import '../utils/logger.dart';
 import 'home_screen.dart';
-
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -35,16 +35,16 @@ class _SplashScreenState extends State<SplashScreen> {
       final userId = await awsAuth.ensureSignedIn();
       
       if (userId != null) {
-        print('Authenticated: $userId');
+        AppLogger.logger.info('User authenticated: $userId');
       } else {
-        print('Authentication failed');
+        AppLogger.logger.warning('Authentication failed');
       }
       
       setState(() => _statusMessage = 'Setting up audio...');
       final audioService = getIt<AudioService>();
       await audioService.initialize();
       
-      // Ensure minimum splash duration to avoid UI flicker/buffer overflow
+      // Ensure minimum splash duration
       final elapsed = DateTime.now().difference(startTime);
       if (elapsed < minSplashDuration) {
         await Future.delayed(minSplashDuration - elapsed);
@@ -55,7 +55,7 @@ class _SplashScreenState extends State<SplashScreen> {
         _statusMessage = 'Ready!';
       });
     } catch (e) {
-      print('Initialization error: $e');
+      AppLogger.logger.severe('Initialization error: $e');
       
       // Still respect minimum duration
       final elapsed = DateTime.now().difference(startTime);
@@ -83,7 +83,7 @@ class _SplashScreenState extends State<SplashScreen> {
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.all(20),
-          child: SingleChildScrollView( // ADDED: Prevents buffer overflow
+          child: SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 minHeight: MediaQuery.of(context).size.height - 40,

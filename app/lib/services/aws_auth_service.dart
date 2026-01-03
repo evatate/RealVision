@@ -88,7 +88,7 @@ class AWSAuthService {
         }
       }
       
-      // No valid session or credentials - create new synthetic user
+      // if no valid session or credentials, create new synthetic user
       safePrint('Creating new synthetic user account...');
       return await _createSyntheticUser();
       

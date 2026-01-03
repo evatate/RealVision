@@ -2,7 +2,6 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:camera/camera.dart';
 import 'dart:ui';
 import 'dart:typed_data';
-import 'dart:convert';
 import '../utils/logger.dart';
 
 class FaceDetectionService {
@@ -12,7 +11,7 @@ class FaceDetectionService {
   int _frameCounter = 0;
 
   /// Process every Nth frame to reduce load
-  static const int _frameSkipRate = 2; // Process every 2nd frame (15 FPS) - more responsive
+  static const int _frameSkipRate = 2; // Process every 2nd frame (15 FPS)
   
   // Stability: keep last result for a few frames to reduce flickering
   FaceDetectionResult? _lastResult;
@@ -25,7 +24,7 @@ class FaceDetectionService {
         enableClassification: true,
         enableTracking: true,
         performanceMode: FaceDetectorMode.accurate,
-        minFaceSize: 0.1, // 10% of image - better for front camera
+        minFaceSize: 0.1, // 10% of image, better for front camera
       ),
     );
   }
@@ -99,7 +98,7 @@ class FaceDetectionService {
     }
   }
 
-  /// Converts CameraImage → InputImage (cross-platform)
+  /// Converts CameraImage → InputImage
   InputImage? _convertCameraImage(
     CameraImage image,
     InputImageRotation rotation,

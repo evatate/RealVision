@@ -4,9 +4,12 @@ import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 class CameraService {
   CameraController? _controller;
   List<CameraDescription>? _cameras;
-  late final InputImageRotation _imageRotation;
+  InputImageRotation? _imageRotation;
+  bool _isInitialized = false;
   
     Future<void> initialize() async {
+    if (_isInitialized) return; // Already initialized
+    
     _cameras = await availableCameras();
     if (_cameras!.isEmpty) {
       throw Exception('No cameras available');
@@ -26,11 +29,9 @@ class CameraService {
     );
     
     await _controller!.initialize();
-    
-    // Lock orientation for consistent aspect ratio
-    //await _controller!.lockCaptureOrientation();
 
     _imageRotation = _rotationFromSensor(frontCamera.sensorOrientation);
+    _isInitialized = true;
   }
 
   InputImageRotation _rotationFromSensor(int sensorOrientation) { 
@@ -51,16 +52,19 @@ class CameraService {
   
   Future<void> dispose() async {
     await _controller?.dispose();
+    _controller = null;
+    _imageRotation = null;
+    _isInitialized = false;
   }
 
   Future<void> startImageStream(
   Function(CameraImage image, InputImageRotation rotation) onImage,
   ) async {
-    if (_controller == null || !_controller!.value.isInitialized) {
+    if (_controller == null || !_controller!.value.isInitialized || _imageRotation == null) {
       throw Exception('Camera not initialized');
     }
     await _controller!.startImageStream((image) {
-      onImage(image, _imageRotation);
+      onImage(image, _imageRotation!);
     });
   }
 
