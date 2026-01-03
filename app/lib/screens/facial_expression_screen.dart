@@ -69,28 +69,28 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'You will:\n\n'
-              '1. Keep neutral face (15s)\n'
-              '2. Smile (15s)\n'
-              '3. Return to neutral (15s)\n\n'
-              'Done twice after practice.',
-              style: TextStyle(fontSize: 20, color: AppColors.textDark),
+              'You will:\n'
+              '1. Keep a neutral face\n'
+              '2. Smile\n'
+              '3. Return to neutral\n'
+              'Done twice after a practice round.',
+              style: TextStyle(fontSize: 22, color: AppColors.textDark),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: 16),
+            SizedBox(height: 20),
             Container(
               padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange[50],
+                color: Color.fromARGB(255, 248, 111, 101),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange[300]!, width: 2),
+                border: Border.all(color: Colors.red[700]!, width: 2),
               ),
               child: Text(
                 '⚠️ Keep your face in frame',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Colors.orange[900],
+                  color: Colors.black,
                 ),
               ),
             ),

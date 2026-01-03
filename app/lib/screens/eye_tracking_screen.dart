@@ -292,20 +292,20 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.blue[50],
+                color: Colors.purple[50],
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue[300]!, width: 2),
+                border: Border.all(color: Colors.purple[300]!, width: 2),
               ),
               child: Text(
-                'Starting with practice round...',
+                'Starts with a practice round',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 24,
                   fontStyle: FontStyle.italic,
-                  color: Colors.blue[900],
+                  color: const Color.fromARGB(255, 0, 0, 0),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -752,15 +752,15 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
           Container(
             padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.blue[50],
+              color: Colors.purple[50],
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.blue[300]!, width: 2),
+              border: Border.all(color: Colors.purple[300]!, width: 2),
             ),
             child: Text(
               'Complete all 3 tests for full assessment',
               style: TextStyle(
                 fontSize: 18,
-                color: Colors.blue[900],
+                color: Colors.purple[900],
                 fontWeight: FontWeight.w600,
               ),
               textAlign: TextAlign.center,
@@ -936,7 +936,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
               child: Container(
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.9),
+                  color: Colors.purple.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.white, width: 2),
                 ),
