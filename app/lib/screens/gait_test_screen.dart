@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/test_progress.dart';
+import '../models/gait_data.dart';
 import '../services/motion_sensor_service.dart';
 import '../services/audio_service.dart';
+import '../services/data_export_service.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../utils/logger.dart';
 import '../widgets/breadcrumb.dart';
 import 'dart:async';
 import '../services/service_locator.dart';
+import 'gait_results_screen.dart';
 
 class GaitTestScreen extends StatefulWidget {
   const GaitTestScreen({super.key});
@@ -81,31 +84,61 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
     if (_startTime == null) return;
 
     _endTime = DateTime.now();
-    
+
     setState(() => _isRecording = false);
     _stepUpdateTimer?.cancel();
-    
-    // Stop recording and get results
-    final gaitData = _motionService.stopRecording(_startTime!, _endTime!);
-    
-    Provider.of<TestProgress>(context, listen: false).markGaitCompleted();
-    
-    await _audioService.speak(
-      'Walking test complete. You took ${gaitData['steps']} steps.'
+
+    // Stop recording and get trial data
+    final trialData = _motionService.stopRecording(_startTime!, _endTime!);
+
+    // Extract features from the trial
+    final features = GaitFeatureExtraction.extractTrialFeatures(trialData);
+
+    // Create session data
+    final sessionData = GaitSessionData(
+      participantId: 'participant_001', 
+      sessionId: 'gait_${DateTime.now().millisecondsSinceEpoch}',
+      timestamp: _startTime!,
+      trials: [trialData],
+      features: features,
     );
-    
+
+    Provider.of<TestProgress>(context, listen: false).markGaitCompleted();
+
+    // Export the data
+    final dataExportService = getIt<DataExportService>();
+    try {
+      await dataExportService.exportGaitSession(sessionData);
+      AppLogger.logger.info('Gait session data exported successfully');
+    } catch (e) {
+      AppLogger.logger.warning('Failed to export gait session data: $e');
+    }
+
+    await _audioService.speak(
+      'Walking test complete. You took ${trialData.stepCount} steps. '
+      'Your gait quality score is ${features.gaitQualityScore.toStringAsFixed(2)}.'
+    );
+
     AppLogger.logger.info('==== WALKING TEST RESULTS ====');
-    AppLogger.logger.info('Steps: ${gaitData['steps']}');
-    AppLogger.logger.info('Duration: ${gaitData['durationMinutes']} min');
-    AppLogger.logger.info('Cadence: ${gaitData['cadence']} steps/min');
-    AppLogger.logger.info('Avg Acceleration: ${gaitData['avgAcceleration']} m/s²');
-    AppLogger.logger.info('Acceleration Variability: ${gaitData['accelerationVariability']}');
-    AppLogger.logger.info('Rotation Rate: ${gaitData['rotationRate']} rad/s');
-    AppLogger.logger.info('Data Source: ${gaitData['dataSource']}');
+    AppLogger.logger.info('Steps: ${trialData.stepCount}');
+    AppLogger.logger.info('Duration: ${trialData.duration.toStringAsFixed(1)} s');
+    AppLogger.logger.info('Cadence: ${features.cadence.toStringAsFixed(1)} steps/min');
+    AppLogger.logger.info('Step Time: ${features.stepTime.toStringAsFixed(2)} s');
+    AppLogger.logger.info('Step Time Variability: ${features.stepTimeVariability.toStringAsFixed(3)}');
+    AppLogger.logger.info('Gait Regularity: ${features.gaitRegularity.toStringAsFixed(3)}');
+    AppLogger.logger.info('Gait Symmetry: ${features.gaitSymmetry.toStringAsFixed(3)}');
+    AppLogger.logger.info('Gait Quality Score: ${features.gaitQualityScore.toStringAsFixed(3)}');
     AppLogger.logger.info('==============================');
-    
+
+    // Navigate to results screen
     Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => GaitResultsScreen(sessionData: sessionData),
+          ),
+        );
+      }
     });
   }
 

@@ -215,16 +215,16 @@ class AWSAuthService {
 
       // Check if identity pool credentials are available
       if (session.identityIdResult.value != null) {
-        AppLogger.logger.info('✅ Identity ID: ${session.identityIdResult.value}');
+        AppLogger.logger.info('Identity ID: ${session.identityIdResult.value}');
 
         // Check if AWS credentials are available
         if (session.credentialsResult.value != null) {
-          AppLogger.logger.info('✅ AWS credentials available for service calls');
+          AppLogger.logger.info('AWS credentials available for service calls');
         } else {
-          AppLogger.logger.warning('⚠️ AWS credentials not yet available');
+          AppLogger.logger.warning('AWS credentials not yet available');
         }
       } else {
-        AppLogger.logger.warning('⚠️ No identity ID available');
+        AppLogger.logger.warning('No identity ID available');
       }
     } catch (e) {
       if (e.toString().contains('No identity pool registered') ||

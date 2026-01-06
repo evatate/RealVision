@@ -2,18 +2,21 @@ import 'package:sensors_plus/sensors_plus.dart';
 import '../utils/logger.dart';
 import 'dart:async';
 import 'dart:math';
+import '../models/gait_data.dart';
 
 class MotionSensorService {
   StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
   StreamSubscription<GyroscopeEvent>? _gyroscopeSubscription;
-  
+
+  List<GaitFrame> _gaitFrames = [];
   List<AccelerometerEvent> _accelerometerData = [];
   List<GyroscopeEvent> _gyroscopeData = [];
-  
+
   int _stepCount = 0;
   bool _isPeakDetected = false;
   DateTime? _lastStepTime;
-  
+  DateTime? _recordingStartTime;
+
   // Step detection thresholds
   static const double STEP_THRESHOLD = 11.5; // Acceleration magnitude threshold
   static const int MIN_STEP_INTERVAL_MS = 200; // Minimum time between steps
@@ -22,9 +25,11 @@ class MotionSensorService {
   void startRecording() {
     AppLogger.logger.info('Starting motion sensor recording...');
     _stepCount = 0;
+    _gaitFrames.clear();
     _accelerometerData.clear();
     _gyroscopeData.clear();
-    
+    _recordingStartTime = DateTime.now();
+
     // Listen to accelerometer (for step detection)
     _accelerometerSubscription = accelerometerEventStream(
       samplingPeriod: Duration(milliseconds: 50), // 20 Hz
@@ -32,7 +37,7 @@ class MotionSensorService {
       _accelerometerData.add(event);
       _detectStep(event);
     });
-    
+
     // Listen to gyroscope (for movement quality)
     _gyroscopeSubscription = gyroscopeEventStream(
       samplingPeriod: Duration(milliseconds: 50),
@@ -42,99 +47,116 @@ class MotionSensorService {
   }
   
   /// Detect steps from accelerometer data using peak detection
-  void _detectStep(AccelerometerEvent event) {
+  void _detectStep(AccelerometerEvent accelEvent) {
+    if (_recordingStartTime == null) return;
+
     // Calculate magnitude of acceleration
     double magnitude = sqrt(
-      event.x * event.x + 
-      event.y * event.y + 
-      event.z * event.z
+      accelEvent.x * accelEvent.x +
+      accelEvent.y * accelEvent.y +
+      accelEvent.z * accelEvent.z
     );
-    
+
+    // Find closest gyroscope reading (by timestamp)
+    GyroscopeEvent? closestGyro = _findClosestGyroscopeEvent(accelEvent);
+
+    // Create gait frame
+    final timestamp = DateTime.now().difference(_recordingStartTime!).inMilliseconds / 1000.0;
+
+    final gaitFrame = GaitFrame(
+      timestamp: timestamp,
+      accelX: accelEvent.x,
+      accelY: accelEvent.y,
+      accelZ: accelEvent.z,
+      gyroX: closestGyro?.x ?? 0.0,
+      gyroY: closestGyro?.y ?? 0.0,
+      gyroZ: closestGyro?.z ?? 0.0,
+      accelerationMagnitude: magnitude,
+      isStep: false, // Will be set below if step is detected
+    );
+
+    _gaitFrames.add(gaitFrame);
+
     // Check for step peak
     if (magnitude > STEP_THRESHOLD && !_isPeakDetected) {
       // Check minimum time between steps
       final now = DateTime.now();
-      if (_lastStepTime == null || 
+      if (_lastStepTime == null ||
           now.difference(_lastStepTime!).inMilliseconds > MIN_STEP_INTERVAL_MS) {
         _stepCount++;
         _lastStepTime = now;
         _isPeakDetected = true;
+
+        // Mark this frame as a step
+        _gaitFrames.last = GaitFrame(
+          timestamp: timestamp,
+          accelX: accelEvent.x,
+          accelY: accelEvent.y,
+          accelZ: accelEvent.z,
+          gyroX: closestGyro?.x ?? 0.0,
+          gyroY: closestGyro?.y ?? 0.0,
+          gyroZ: closestGyro?.z ?? 0.0,
+          accelerationMagnitude: magnitude,
+          isStep: true,
+        );
+
         AppLogger.logger.fine('Step detected! Total: $_stepCount');
       }
     } else if (magnitude < STEP_THRESHOLD) {
       _isPeakDetected = false;
     }
-    
+  }
+
+  /// Find the closest gyroscope event by timestamp
+  GyroscopeEvent? _findClosestGyroscopeEvent(AccelerometerEvent accelEvent) {
+    if (_gyroscopeData.isEmpty) return null;
+    return _gyroscopeData.last;
   }
   
-  /// Stop recording and get results
-  Map<String, dynamic> stopRecording(DateTime startTime, DateTime endTime) {
+  /// Stop recording and get results as GaitTrialData
+  GaitTrialData stopRecording(DateTime startTime, DateTime endTime) {
     AppLogger.logger.info('Stopping motion sensor recording...');
-    
+
     _accelerometerSubscription?.cancel();
     _gyroscopeSubscription?.cancel();
-    
-    final durationMinutes = endTime.difference(startTime).inSeconds / 60.0;
-    final cadence = durationMinutes > 0 ? _stepCount / durationMinutes : 0.0;
-    
-    // Calculate gait metrics
-    final metrics = _calculateGaitMetrics();
-    
-    return {
-      'steps': _stepCount,
-      'durationMinutes': durationMinutes,
-      'cadence': cadence,
-      'accelerometerSamples': _accelerometerData.length,
-      'gyroscopeSamples': _gyroscopeData.length,
-      'dataSource': 'Motion Sensors (Accelerometer + Gyroscope)',
-      'platform': 'Real-time sensor data',
-      ...metrics,
-    };
-  }
-  
-  /// Calculate advanced gait metrics from sensor data
-  Map<String, dynamic> _calculateGaitMetrics() {
-    if (_accelerometerData.length < 2) {
-      return {
-        'avgAcceleration': 0.0,
-        'accelerationVariability': 0.0,
-        'rotationRate': 0.0,
-      };
-    }
-    
-    // Calculate average acceleration magnitude
-    List<double> magnitudes = _accelerometerData.map((e) {
-      return sqrt(e.x * e.x + e.y * e.y + e.z * e.z);
-    }).toList();
-    
-    double avgAcceleration = magnitudes.reduce((a, b) => a + b) / magnitudes.length;
-    
-    // Calculate acceleration variability (standard deviation)
-    double sumSquaredDiff = magnitudes
-        .map((m) => pow(m - avgAcceleration, 2).toDouble())
-        .reduce((a, b) => a + b);
-    double accelerationVariability = sqrt(sumSquaredDiff / magnitudes.length);
-    
-    // Calculate rotation rate from gyroscope
-    double avgRotation = 0.0;
-    if (_gyroscopeData.isNotEmpty) {
-      List<double> rotationMagnitudes = _gyroscopeData.map((e) {
-        return sqrt(e.x * e.x + e.y * e.y + e.z * e.z);
-      }).toList();
-      avgRotation = rotationMagnitudes.reduce((a, b) => a + b) / rotationMagnitudes.length;
-    }
-    
-    return {
-      'avgAcceleration': avgAcceleration,
-      'accelerationVariability': accelerationVariability,
-      'rotationRate': avgRotation,
-      'message': 'Gait metrics calculated from motion sensors',
-    };
+
+    final duration = endTime.difference(startTime).inSeconds.toDouble();
+
+    // Extract features from the collected frames
+    final features = GaitFeatureExtraction.extractTrialFeatures(
+      GaitTrialData(
+        trialNumber: 1, // Single trial for now
+        frames: _gaitFrames,
+        duration: duration,
+        stepCount: _stepCount,
+      )
+    );
+
+    final trialData = GaitTrialData(
+      trialNumber: 1,
+      frames: _gaitFrames,
+      duration: duration,
+      stepCount: _stepCount,
+    );
+
+    AppLogger.logger.info('==== WALKING TEST RESULTS ====');
+    AppLogger.logger.info('Steps: $_stepCount');
+    AppLogger.logger.info('Duration: ${duration.toStringAsFixed(1)} s');
+    AppLogger.logger.info('Cadence: ${features.cadence.toStringAsFixed(1)} steps/min');
+    AppLogger.logger.info('Step Time: ${features.stepTime.toStringAsFixed(2)} s');
+    AppLogger.logger.info('Gait Regularity: ${features.gaitRegularity.toStringAsFixed(3)}');
+    AppLogger.logger.info('Gait Quality Score: ${features.gaitQualityScore.toStringAsFixed(3)}');
+    AppLogger.logger.info('==============================');
+
+    return trialData;
   }
   
   /// Get current step count (for live display)
   int get currentStepCount => _stepCount;
-  
+
+  /// Get current gait frames (for analysis)
+  List<GaitFrame> get gaitFrames => _gaitFrames;
+
   void dispose() {
     _accelerometerSubscription?.cancel();
     _gyroscopeSubscription?.cancel();

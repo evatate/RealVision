@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import '../models/test_progress.dart';
 import '../services/camera_service.dart';
 import '../services/audio_service.dart';
 import '../services/face_detection_service.dart';
+import '../models/smile_data.dart';
+import '../services/data_export_service.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../utils/logger.dart';
 import '../widgets/breadcrumb.dart';
+import 'smile_results_screen.dart';
+import '../services/service_locator.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 
@@ -26,6 +28,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   final CameraService _cameraService = CameraService();
   final AudioService _audioService = AudioService();
   final FaceDetectionService _faceDetector = FaceDetectionService();
+  late DataExportService _dataExport;
   
   SmilePhase _currentPhase = SmilePhase.none;
   int _countdown = 0;
@@ -38,9 +41,17 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   double _smileProbability = 0.0;
   Timer? _faceDetectionTimer;
 
+  // Data collection for feature extraction
+  String? _participantId;
+  DateTime? _sessionStartTime;
+  List<SmileTrialData> _collectedTrials = [];
+  List<SmileFrame> _currentTrialFrames = [];
+  Stopwatch? _trialStopwatch;
+
   @override
   void initState() {
     super.initState();
+    _dataExport = getIt<DataExportService>();
     _audioService.initialize();
   }
 
@@ -120,9 +131,16 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
     try {
       await _cameraService.initialize();
       if (!mounted) return;
-      
+
       await Future.delayed(const Duration(milliseconds: 500));
-      
+
+      // Initialize data collection
+      _participantId = 'participant_${DateTime.now().millisecondsSinceEpoch}';
+      _sessionStartTime = DateTime.now();
+      _collectedTrials = [];
+      _currentTrialFrames = [];
+      _trialStopwatch = Stopwatch();
+
       setState(() {
         _cameraInitialized = true;
         _currentPhase = SmilePhase.neutral;
@@ -130,9 +148,9 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
         _isPractice = true;
         _repetitionCount = 0;
       });
-      
+
       _startFaceDetection();
-      
+
       await _audioService.speak('Practice round. Keep neutral face');
       _startCountdown();
     } catch (e) {
@@ -144,15 +162,27 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
     try {
       await _cameraService.startImageStream((CameraImage image, InputImageRotation rotation) async {
         if (_faceDetectionTimer?.isActive ?? false) return;
-        
-        _faceDetectionTimer = Timer(Duration(milliseconds: 500), () async {
+
+        _faceDetectionTimer = Timer(Duration(milliseconds: 33), () async { // ~30 fps
           final result = await _faceDetector.detectFace(
             image,
-            rotation, // Use the correct rotation from camera service
+            rotation,
           );
-          
-          AppLogger.logger.fine('Face detection result: faceDetected=${result.faceDetected}, smile=${result.smilingProbability}');
-          
+
+          final timestamp = _trialStopwatch?.elapsedMilliseconds.toDouble() ?? 0.0;
+          final smileIndex = (result.smilingProbability * 100).clamp(0.0, 100.0);
+
+          // Collect frame data for feature extraction
+          if (_currentPhase != SmilePhase.none && _currentPhase != SmilePhase.complete) {
+            final phaseString = _getPhaseString(_currentPhase);
+            final frame = SmileFrame(
+              timestamp: timestamp / 1000.0, // convert to seconds
+              smileIndex: smileIndex,
+              phase: phaseString,
+            );
+            _currentTrialFrames.add(frame);
+          }
+
           if (mounted) {
             setState(() {
               _isFaceDetected = result.faceDetected;
@@ -164,6 +194,24 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
     } catch (e) {
       AppLogger.logger.severe('Error starting face detection: $e');
     }
+  }
+
+  String _getPhaseString(SmilePhase phase) {
+    switch (phase) {
+      case SmilePhase.neutral:
+      case SmilePhase.neutral2:
+        return 'neutral';
+      case SmilePhase.smile:
+        return 'smile';
+      default:
+        return 'neutral';
+    }
+  }
+
+  void _stopFaceDetection() {
+    _faceDetectionTimer?.cancel();
+    _faceDetectionTimer = null;
+    _cameraService.stopImageStream();
   }
 
   void _startCountdown() {
@@ -186,6 +234,10 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   void _nextPhase() {
     switch (_currentPhase) {
       case SmilePhase.neutral:
+        // Start trial stopwatch when moving to first phase
+        if (_trialStopwatch != null && !_trialStopwatch!.isRunning) {
+          _trialStopwatch!.start();
+        }
         setState(() {
           _currentPhase = SmilePhase.smile;
           _countdown = AppConstants.smilePhaseDuration;
@@ -193,7 +245,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
         _audioService.speak(_isPractice ? 'Practice. Smile now' : 'Smile now');
         _startCountdown();
         break;
-        
+
       case SmilePhase.smile:
         setState(() {
           _currentPhase = SmilePhase.neutral2;
@@ -202,8 +254,11 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
         _audioService.speak('Return to neutral face');
         _startCountdown();
         break;
-        
+
       case SmilePhase.neutral2:
+        // Complete trial and save data
+        _completeTrial();
+
         if (_isPractice) {
           setState(() {
             _isPractice = false;
@@ -226,20 +281,85 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
           }
         }
         break;
-        
+
       default:
         break;
     }
   }
 
+  void _completeTrial() {
+    if (_trialStopwatch != null) {
+      _trialStopwatch!.stop();
+    }
+
+    // Save trial data
+    final trialData = SmileTrialData(
+      trialNumber: _isPractice ? 0 : _repetitionCount + 1,
+      frames: List.from(_currentTrialFrames),
+    );
+
+    if (!_isPractice) {
+      _collectedTrials.add(trialData);
+    }
+
+    // Reset for next trial
+    _currentTrialFrames = [];
+    if (_trialStopwatch != null) {
+      _trialStopwatch!.reset();
+    }
+
+    AppLogger.logger.info('Completed trial ${_isPractice ? "practice" : _repetitionCount + 1} with ${trialData.frames.length} frames');
+  }
+
   void _completeTest() {
-    setState(() => _currentPhase = SmilePhase.complete);
-    _cameraService.stopImageStream();
-    Provider.of<TestProgress>(context, listen: false).markSmileCompleted();
-    _audioService.speak('Smile test complete');
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) Navigator.pop(context);
+    // Stop face detection
+    _stopFaceDetection();
+
+    // Extract features from collected trials
+    final sessionFeatures = SmileFeatureExtraction.extractSessionFeatures(
+      SmileSessionData(
+        participantId: _participantId!,
+        sessionId: '',
+        timestamp: DateTime.now(),
+        trials: _collectedTrials,
+        features: SmileFeatures(
+          smilingDuration: 0.0,
+          proportionSmiling: 0.0,
+          timeToSmile: 0.0,
+          meanSmileIndex: 0.0,
+          maxSmileIndex: 0.0,
+          minSmileIndex: 0.0,
+          stdSmileIndex: 0.0,
+          smileNeutralDifference: 0.0,
+        ),
+      ),
+    );
+
+    // Create session data
+    final sessionData = SmileSessionData(
+      participantId: _participantId!,
+      sessionId: DateTime.now().millisecondsSinceEpoch.toString(),
+      timestamp: DateTime.now(),
+      trials: _collectedTrials,
+      features: sessionFeatures,
+    );
+
+    // Export to JSON
+    _dataExport.exportSmileSession(sessionData).then((filePath) {
+      AppLogger.logger.info('Smile session data exported to: $filePath');
+    }).catchError((error) {
+      AppLogger.logger.severe('Failed to export smile session data: $error');
     });
+
+    // Navigate to results screen
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) => SmileResultsScreen(
+          sessionData: sessionData,
+          exportPath: null, // Will be set by export service
+        ),
+      ),
+    );
   }
 
   @override

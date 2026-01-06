@@ -67,6 +67,60 @@ class AWSStorageService {
     }
   }
   
+  // Upload any file to S3 securely
+  Future<String?> uploadFile(String localPath, String fileType) async {
+    try {
+      final userId = await _authService.getCurrentUserId();
+      if (userId == null) {
+        throw Exception('User not authenticated');
+      }
+      
+      final file = File(localPath);
+      if (!await file.exists()) {
+        throw Exception('File not found: $localPath');
+      }
+      
+      // Generate unique S3 key with timestamp
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = '${fileType}_$timestamp.json';
+      final identityId = await _authService.getIdentityId();
+      if (identityId == null) {
+        throw Exception('No identity ID available');
+      }
+
+      final s3Key = 'private/$identityId/data/$fileName';
+      
+      AppLogger.logger.info('Uploading $fileType data to S3: $s3Key');
+      
+      // Upload to S3 with Amplify Storage
+      final result = await Amplify.Storage.uploadFile(
+        localFile: AWSFile.fromPath(localPath),
+        path: StoragePath.fromString(s3Key),
+        options: const StorageUploadFileOptions(
+          pluginOptions: S3UploadFilePluginOptions(
+            getProperties: true,
+          ),
+        ),
+      ).result;
+      
+      AppLogger.logger.info('Upload complete: ${result.uploadedItem.path}');
+      
+      // Return the S3 key for later reference
+      return s3Key;
+      
+    } catch (e) {
+      // Check if this is an identity pool related error
+      if (e.toString().contains('InvalidAccountTypeException') ||
+          e.toString().contains('No identity pool registered') ||
+          e.toString().contains('identity pool')) {
+        AppLogger.logger.warning('AWS S3 upload failed - identity pool not configured: $e');
+      } else {
+        AppLogger.logger.severe('Upload error: $e');
+      }
+      return null;
+    }
+  }
+  
   /// Trigger AWS Transcribe Medical for audio transcription
   Future<Map<String, dynamic>?> transcribeAudio(String s3Key) async {
     try {

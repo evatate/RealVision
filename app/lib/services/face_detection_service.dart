@@ -67,10 +67,8 @@ class FaceDetectionService {
 
       FaceDetectionResult result;
       if (faces.isEmpty) {
-        AppLogger.logger.fine('No faces detected in image');
         result = FaceDetectionResult(faceDetected: false);
       } else {
-        AppLogger.logger.fine('Detected ${faces.length} face(s)');
         final face = faces.first;
         final smileProbability = face.smilingProbability ?? 0.0;
         

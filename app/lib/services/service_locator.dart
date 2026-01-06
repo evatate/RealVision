@@ -6,6 +6,7 @@ import 'eye_tracking_service.dart';
 import 'motion_sensor_service.dart';
 import 'aws_auth_service.dart'; 
 import 'aws_storage_service.dart';
+import 'data_export_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -14,6 +15,11 @@ void setupServiceLocator() {
   getIt.registerLazySingleton<AWSAuthService>(() => AWSAuthService());
   getIt.registerLazySingleton<AWSStorageService>(
     () => AWSStorageService(getIt<AWSAuthService>()),
+  );
+
+  // Data Export Service
+  getIt.registerLazySingleton<DataExportService>(
+    () => DataExportService(awsStorage: getIt<AWSStorageService>()),
   );
 
   /// App Services
