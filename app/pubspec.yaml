@@ -27,7 +27,7 @@ dependencies:
   speech_to_text: 7.2.0
   flutter_tts: ^4.2.3
   permission_handler: ^12.0.1
-  #record: ^4.4.4
+  flutter_sound: ^9.2.13
   
   # Motion Sensors
   sensors_plus: ^7.0.0

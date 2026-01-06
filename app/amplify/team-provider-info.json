@@ -1,0 +1,20 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-realvision-dev-54f24-authRole",
+      "UnauthRoleArn": "arn:aws:iam::682293268093:role/amplify-realvision-dev-54f24-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::682293268093:role/amplify-realvision-dev-54f24-authRole",
+      "Region": "us-east-2",
+      "DeploymentBucketName": "amplify-realvision-dev-54f24-deployment",
+      "UnauthRoleName": "amplify-realvision-dev-54f24-unauthRole",
+      "StackName": "amplify-realvision-dev-54f24",
+      "StackId": "arn:aws:cloudformation:us-east-2:682293268093:stack/amplify-realvision-dev-54f24/762869f0-e99e-11f0-b394-066680f59f99",
+      "AmplifyAppId": "d14n6b7e03ss7d"
+    },
+    "categories": {
+      "auth": {
+        "realvision03b33550": {}
+      }
+    }
+  }
+}

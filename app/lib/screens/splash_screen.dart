@@ -42,7 +42,7 @@ class _SplashScreenState extends State<SplashScreen> {
       } else {
         AppLogger.logger.warning('Authentication failed');
       }
-      
+
       setState(() => _statusMessage = 'Setting up audio...');
       final audioService = getIt<AudioService>();
       await audioService.initialize();

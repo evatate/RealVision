@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../services/aws_storage_service.dart';
 
 class TestProgress with ChangeNotifier {
   bool _speechCompleted = false;
@@ -7,6 +8,8 @@ class TestProgress with ChangeNotifier {
   bool _pursuitCompleted = false;
   bool _smileCompleted = false;
   bool _gaitCompleted = false;
+  
+  SpeechAnalysis? _speechAnalysis;
 
   bool get speechCompleted => _speechCompleted;
   bool get fixationCompleted => _fixationCompleted;
@@ -14,6 +17,8 @@ class TestProgress with ChangeNotifier {
   bool get pursuitCompleted => _pursuitCompleted;
   bool get smileCompleted => _smileCompleted;
   bool get gaitCompleted => _gaitCompleted;
+  
+  SpeechAnalysis? get speechAnalysis => _speechAnalysis;
   
   bool get eyeTrackingCompleted => _fixationCompleted && _prosaccadeCompleted && _pursuitCompleted;
   
@@ -24,6 +29,12 @@ class TestProgress with ChangeNotifier {
       _gaitCompleted;
 
   void markSpeechCompleted() {
+    _speechCompleted = true;
+    notifyListeners();
+  }
+
+  void completeSpeechTest(SpeechAnalysis analysis) {
+    _speechAnalysis = analysis;
     _speechCompleted = true;
     notifyListeners();
   }
@@ -60,6 +71,7 @@ class TestProgress with ChangeNotifier {
     _pursuitCompleted = false;
     _smileCompleted = false;
     _gaitCompleted = false;
+    _speechAnalysis = null;
     notifyListeners();
   }
 }

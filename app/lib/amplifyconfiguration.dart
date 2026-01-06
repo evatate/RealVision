@@ -16,9 +16,35 @@ const amplifyconfig = '''{
             "Region": "us-east-2"
           }
         },
+        "CredentialsProvider": {
+          "CognitoIdentity": {
+            "Default": {
+              "PoolId": "us-east-2:3ef0f050-a32c-4824-8b0d-022d7eefff3d",
+              "Region": "us-east-2"
+            }
+          }
+        },
         "Auth": {
           "Default": {
-            "authenticationFlowType": "USER_SRP_AUTH"
+            "authenticationFlowType": "USER_SRP_AUTH",
+            "socialProviders": [],
+            "usernameAttributes": [
+              "EMAIL"
+            ],
+            "signupAttributes": [
+              "EMAIL"
+            ],
+            "passwordProtectionSettings": {
+              "passwordPolicyMinLength": 8,
+              "passwordPolicyCharacters": []
+            },
+            "mfaConfiguration": "OFF",
+            "mfaTypes": [
+              "SMS"
+            ],
+            "verificationMechanisms": [
+              "EMAIL"
+            ]
           }
         }
       }
@@ -28,7 +54,7 @@ const amplifyconfig = '''{
     "plugins": {
       "awsS3StoragePlugin": {
         "bucket": "realvision-dev-audio",
-        "region": "us-east-1",
+        "region": "us-east-2",
         "defaultAccessLevel": "private"
       }
     }

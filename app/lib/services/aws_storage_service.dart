@@ -28,7 +28,13 @@ class AWSStorageService {
       // Generate unique S3 key with timestamp
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = 'speech_$timestamp.wav';
-      final s3Key = 'private/$userId/audio/$fileName';
+      //final s3Key = 'private/$userId/audio/$fileName';
+      final identityId = await _authService.getIdentityId();
+      if (identityId == null) {
+        throw Exception('No identity ID available');
+      }
+
+      final s3Key = 'private/$identityId/audio/$fileName';
       
       AppLogger.logger.info('Uploading to S3: $s3Key');
       
@@ -49,7 +55,14 @@ class AWSStorageService {
       return s3Key;
       
     } catch (e) {
-      AppLogger.logger.severe('Upload error: $e');
+      // Check if this is an identity pool related error
+      if (e.toString().contains('InvalidAccountTypeException') ||
+          e.toString().contains('No identity pool registered') ||
+          e.toString().contains('identity pool')) {
+        AppLogger.logger.warning('AWS S3 upload failed - identity pool not configured: $e');
+      } else {
+        AppLogger.logger.severe('Upload error: $e');
+      }
       return null;
     }
   }
@@ -190,6 +203,7 @@ class AWSStorageService {
       transcript: text,
     );
   }
+
   
   /// Download file from S3
   Future<String?> downloadFile(String s3Key, String localPath) async {
@@ -203,7 +217,14 @@ class AWSStorageService {
       return result.localFile.path;
       
     } catch (e) {
-      AppLogger.logger.severe('Download error: $e');
+      // Check if this is an identity pool related error
+      if (e.toString().contains('InvalidAccountTypeException') ||
+          e.toString().contains('No identity pool registered') ||
+          e.toString().contains('identity pool')) {
+        AppLogger.logger.warning('AWS S3 download failed - identity pool not configured: $e');
+      } else {
+        AppLogger.logger.severe('Download error: $e');
+      }
       return null;
     }
   }
@@ -221,7 +242,14 @@ class AWSStorageService {
       return result.items.map((item) => item.path).toList();
       
     } catch (e) {
-      AppLogger.logger.severe('List error: $e');
+      // Check if this is an identity pool related error
+      if (e.toString().contains('InvalidAccountTypeException') ||
+          e.toString().contains('No identity pool registered') ||
+          e.toString().contains('identity pool')) {
+        AppLogger.logger.warning('AWS S3 list failed - identity pool not configured: $e');
+      } else {
+        AppLogger.logger.severe('List error: $e');
+      }
       return [];
     }
   }

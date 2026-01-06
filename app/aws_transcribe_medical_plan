@@ -1,0 +1,249 @@
+# AWS Medical Transcribe Integration & Model Deployment Guide
+
+This document describes **exactly** how to integrate AWS Medical Transcribe into your app, what data to send to AWS, what data you must generate yourself, and how to deploy your existing speech models without retraining.
+
+---
+
+## 1. System Overview
+
+**Goal:**
+Convert in-app speech recordings into structured features compatible with an already-trained cognitive speech model.
+
+**Key Principle:**
+AWS Medical Transcribe provides **ASR only**. All research formats (CHAT), metadata, features, and modeling remain under your control.
+
+High-level flow:
+
+```
+User Speech (App)
+   ↓
+Audio Preprocessing (noise removal, normalization)
+   ↓
+WAV Storage
+   ↓
+AWS Medical Transcribe
+   ↓
+JSON Transcript + Timestamps
+   ↓
+CHAT Conversion + Metadata Generation
+   ↓
+Feature Extraction
+   ↓
+Model Inference (RF)
+   ↓
+Results Storage / UI
+```
+
+---
+
+## 2. Audio Data Requirements (What You Send to AWS)
+
+### 2.1 Audio Format
+
+AWS Medical Transcribe requires:
+
+* WAV format
+* 16-bit PCM
+* 16 kHz sample rate (recommended)
+* Mono channel
+
+Your existing pipeline already satisfies this.
+
+### 2.2 Audio Duration
+
+Recommended constraints:
+
+* Minimum: **45–60 seconds** of continuous speech
+* Maximum per job: AWS limits apply (chunk if needed)
+
+### 2.3 Audio Content Constraints
+
+To match your trained model:
+
+* Single speaker only
+* Open-ended monologue
+* No interruptions or system prompts
+
+---
+
+## 3. What AWS Medical Transcribe Produces
+
+AWS outputs **JSON only**. It does NOT:
+
+* Create CHAT files
+* Store WAV files
+* Generate metadata
+* Compute features
+
+### 3.1 JSON Contents
+
+Each transcription job includes:
+
+* Full transcript text
+* Word-level timestamps
+* Confidence scores
+* Punctuation tokens
+
+This JSON is your raw transcription source.
+
+---
+
+## 4. Generating CHAT (.cha) Files
+
+### 4.1 Why CHAT is Needed
+
+Your existing pipeline expects CHAT-style transcripts:
+
+* `*PAR:` speaker prefix
+* Explicit pause encoding
+* Preserved filled pauses
+
+### 4.2 Minimal CHAT Format (Sufficient)
+
+```
+*PAR: the boy is stealing cookies from the jar ... while the mother is distracted .
+```
+
+Your code does NOT require interviewer turns or complex annotations.
+
+### 4.3 Pause Encoding Rules
+
+Convert AWS timestamps into CHAT pause tokens:
+
+| Silence Gap | CHAT Token |
+| ----------- | ---------- |
+| < 0.5s      | none       |
+| 0.5–1.0s    | `.`        |
+| > 1.0s      | `...`      |
+
+### 4.4 Filled Pauses
+
+AWS outputs `um`, `uh` as tokens. Your preprocessing converts these automatically.
+
+---
+
+## 5. WAV File Storage
+
+AWS never modifies audio. You must store:
+
+```
+speech/data/app/
+ ├── Normalised_audio-chunks/
+ │    └── SUBJECT_ID.wav
+ └── transcription/
+      └── SUBJECT_ID.cha
+```
+
+This mirrors your training structure exactly.
+
+---
+
+## 6. Metadata Generation
+
+AWS does NOT supply metadata.
+
+### 6.1 Required Metadata Fields
+
+Your pipeline expects:
+
+* Subject ID
+* Age
+* Gender
+* MMSE (optional at inference)
+
+### 6.2 Metadata File Format
+
+Semicolon-delimited text file:
+
+```
+ID;age;gender;mmse
+ABCD;72;female;
+EFGH;68;male;
+```
+
+Notes:
+
+* MMSE may be blank
+* Gender must be `male` or `female`
+
+---
+
+## 7. Feature Extraction (Unchanged)
+
+You reuse your **existing feature pipeline**:
+
+### Acoustic Features
+
+* eGeMAPS (openSMILE)
+* MFCC-based ADR (KMeans)
+* Pitch, energy
+* Pause statistics
+
+### Linguistic Features
+
+* Word count
+* Transcript length
+* Filled pauses
+* Pause counts
+
+No retraining required.
+
+---
+
+## 8. Model Deployment
+
+### 8.1 Loaded Artifacts
+
+At inference time load:
+
+* `rf_model.joblib`
+* `imputer.joblib`
+* `scaler.joblib`
+* `feature_cols.joblib`
+
+### 8.2 Inference Flow
+
+```
+Features → Imputer → Scaler → RF Model
+```
+
+### 8.3 Outputs
+
+* Binary label (control / risk)
+* Probability score
+
+Recommended reporting:
+
+* Risk band (low / moderate / high)
+* Not raw MMSE
+
+---
+
+## 9. App-Level Safeguards (Critical)
+
+To maintain validity:
+
+* Reject recordings < 30 seconds
+* Prompt user to continue if silent > 3 seconds
+* Disable early completion
+
+These replicate interview dynamics from training data.
+
+---
+
+## 10. Security & Compliance Notes
+
+* Use AWS Medical Transcribe for HIPAA eligibility
+* Store audio securely (S3 with encryption)
+* Never store raw transcripts client-side
+
+---
+
+## 11. Summary
+
+* AWS provides transcription only
+* You generate CHAT, metadata, features
+* Your trained model remains unchanged
+* App task must enforce sustained speech
+
+This architecture is **research-aligned, clinically defensible, and production-safe**.

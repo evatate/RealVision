@@ -4,6 +4,7 @@ import 'package:amplify_storage_s3/amplify_storage_s3.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 import '../amplifyconfiguration.dart';
+import '../utils/logger.dart';
 
 /// Secure AWS Authentication Service
 /// 
@@ -31,6 +32,7 @@ class AWSAuthService {
       ]);
       
       await Amplify.configure(amplifyconfig);
+
       _configured = true;
       
       safePrint('AWS Amplify configured successfully');
@@ -54,6 +56,7 @@ class AWSAuthService {
         final user = await Amplify.Auth.getCurrentUser();
         _currentUserId = user.userId;
         await _secureStorage.write(key: _USER_ID_KEY, value: _currentUserId);
+        await ensureAwsCredentials();
         return _currentUserId;
       }
       
@@ -78,6 +81,7 @@ class AWSAuthService {
             await _secureStorage.write(key: _USER_ID_KEY, value: _currentUserId);
             
             safePrint('Signed in with existing credentials: $_currentUserId');
+            await ensureAwsCredentials();
             return _currentUserId;
           }
         } catch (e) {
@@ -89,8 +93,10 @@ class AWSAuthService {
       
       // if no valid session or credentials, create new synthetic user
       safePrint('Creating new synthetic user account...');
-      return await _createSyntheticUser();
-      
+      final newUserId = await _createSyntheticUser();
+      // Fetch Identity Pool credentials for the new user
+      await ensureAwsCredentials();
+      return newUserId;
     } catch (e) {
       safePrint('Error in ensureSignedIn: $e');
       return null;
@@ -195,6 +201,77 @@ class AWSAuthService {
       return session.isSignedIn;
     } catch (e) {
       return false;
+    }
+  }
+  
+  /// Force credential resolution immediately after sign in
+  Future<void> ensureAwsCredentials() async {
+    try {
+      final session = await Amplify.Auth.fetchAuthSession() as CognitoAuthSession;
+
+      if (!session.isSignedIn) {
+        throw Exception('User not signed in');
+      }
+
+      // Check if identity pool credentials are available
+      if (session.identityIdResult.value != null) {
+        AppLogger.logger.info('✅ Identity ID: ${session.identityIdResult.value}');
+
+        // Check if AWS credentials are available
+        if (session.credentialsResult.value != null) {
+          AppLogger.logger.info('✅ AWS credentials available for service calls');
+        } else {
+          AppLogger.logger.warning('⚠️ AWS credentials not yet available');
+        }
+      } else {
+        AppLogger.logger.warning('⚠️ No identity ID available');
+      }
+    } catch (e) {
+      if (e.toString().contains('No identity pool registered') ||
+          e.toString().contains('InvalidAccountTypeException')) {
+        AppLogger.logger.warning('Identity pool not configured - proceeding with user pool auth only');
+        AppLogger.logger.warning('Note: AWS services requiring credentials will need identity pool setup');
+      } else {
+        AppLogger.logger.severe('Error ensuring AWS credentials: $e');
+        rethrow;
+      }
+    }
+  }
+
+  Future<String?> getIdentityId() async {
+    final session = await Amplify.Auth.fetchAuthSession() as CognitoAuthSession;
+
+    if (!session.isSignedIn) {
+      throw Exception('User is not signed in');
+    }
+
+    final identityId = session.identityIdResult.value;
+    if (identityId == null) {
+      throw Exception('No identity ID available. Is your Identity Pool configured?');
+    }
+
+    return identityId;
+  }
+  
+  /// Get AWS credentials for direct API calls (access key, secret key, session token)
+  Future<Map<String, String>?> getAWSCredentials() async {
+    try {
+      final session = await Amplify.Auth.fetchAuthSession() as CognitoAuthSession;
+
+      if (session.credentialsResult.value != null) {
+        final credentials = session.credentialsResult.value!;
+        return {
+          'accessKeyId': credentials.accessKeyId,
+          'secretAccessKey': credentials.secretAccessKey,
+          'sessionToken': credentials.sessionToken ?? '',
+        };
+      } else {
+        safePrint('No AWS credentials available');
+        return null;
+      }
+    } catch (e) {
+      safePrint('Error getting AWS credentials: $e');
+      return null;
     }
   }
   
