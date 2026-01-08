@@ -181,8 +181,8 @@ class EyeTrackingFeatures {
 }
 
 class EyeTrackingFeatureExtraction {
-  static const double FIXATION_THRESHOLD = 0.25;
-  static const int MIN_FRAMES_FOR_ANALYSIS = 5;
+  static const double fixationThreshold = 0.25;
+  static const int minFramesForAnalysis = 5;
 
   /// Extract aggregate features across all trials - THIS IS THE MAIN METHOD
   static EyeTrackingFeatures extractSessionFeatures(EyeTrackingSessionData session) {
@@ -316,10 +316,10 @@ class EyeTrackingFeatureExtraction {
     // Calculate max fixation duration
     double maxFixationDuration = 0.0;
     double currentFixationDuration = 0.0;
-    const fixationThreshold = FIXATION_THRESHOLD;
+    const fixThreshold = fixationThreshold;
 
     for (int i = 1; i < allFrames.length; i++) {
-      if (allFrames[i].distance < fixationThreshold) {
+      if (allFrames[i].distance < fixThreshold) {
         final duration = (allFrames[i].timestamp - allFrames[i - 1].timestamp) * 1000; // ms
         currentFixationDuration += duration;
       } else {
@@ -366,7 +366,7 @@ class EyeTrackingFeatureExtraction {
     double totalLatency = 0.0;
     double totalSaccades = 0.0;
 
-    const double TARGET_THRESHOLD = 0.15;
+    const double targetThreshold = 0.15;
 
     for (final trial in trials) {
       if (trial.frames.isEmpty) continue;
@@ -405,7 +405,7 @@ class EyeTrackingFeatureExtraction {
       if (peripheralSegment == null || peripheralSegment.isEmpty) continue;
 
       // Check if gaze reached target
-      final reachedFrames = peripheralSegment.where((f) => f.distance < TARGET_THRESHOLD).toList();
+      final reachedFrames = peripheralSegment.where((f) => f.distance < targetThreshold).toList();
       
       if (reachedFrames.isNotEmpty) {
         successfulTrials++;
@@ -466,7 +466,7 @@ class EyeTrackingFeatureExtraction {
     AppLogger.logger.info('=== PURSUIT METRICS WITH DEBUG ===');
     
     for (final trial in trials) {
-      if (trial.frames.length < MIN_FRAMES_FOR_ANALYSIS) continue;
+      if (trial.frames.length < minFramesForAnalysis) continue;
 
       // DEBUG: Check target movement for first trial
       if (trial.trialNumber == 1) {
@@ -596,13 +596,6 @@ class EyeTrackingFeatureExtraction {
       'catchUpSaccades': catchUpSaccades,
       'totalDataPoints': totalSamples,
     };
-  }
-
-  static double _calculateVariance(List<double> values) {
-    if (values.isEmpty) return 0.0;
-    final mean = values.reduce((a, b) => a + b) / values.length;
-    final variance = values.map((v) => pow(v - mean, 2)).reduce((a, b) => a + b) / values.length;
-    return variance;
   }
 
   static double _calculateDistance(Offset p1, Offset p2) {

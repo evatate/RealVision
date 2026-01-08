@@ -8,9 +8,9 @@ class MotionSensorService {
   StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
   StreamSubscription<GyroscopeEvent>? _gyroscopeSubscription;
 
-  List<GaitFrame> _gaitFrames = [];
-  List<AccelerometerEvent> _accelerometerData = [];
-  List<GyroscopeEvent> _gyroscopeData = [];
+  final List<GaitFrame> _gaitFrames = [];
+  final List<AccelerometerEvent> _accelerometerData = [];
+  final List<GyroscopeEvent> _gyroscopeData = [];
 
   int _stepCount = 0;
   bool _isPeakDetected = false;
@@ -18,8 +18,8 @@ class MotionSensorService {
   DateTime? _recordingStartTime;
 
   // Step detection thresholds
-  static const double STEP_THRESHOLD = 11.5; // Acceleration magnitude threshold
-  static const int MIN_STEP_INTERVAL_MS = 200; // Minimum time between steps
+  static const double stepThreshold = 11.5; // Acceleration magnitude threshold
+  static const int minStepIntervalMs = 200; // Minimum time between steps
   
   /// Start recording motion data
   void startRecording() {
@@ -78,11 +78,11 @@ class MotionSensorService {
     _gaitFrames.add(gaitFrame);
 
     // Check for step peak
-    if (magnitude > STEP_THRESHOLD && !_isPeakDetected) {
+    if (magnitude > stepThreshold && !_isPeakDetected) {
       // Check minimum time between steps
       final now = DateTime.now();
       if (_lastStepTime == null ||
-          now.difference(_lastStepTime!).inMilliseconds > MIN_STEP_INTERVAL_MS) {
+          now.difference(_lastStepTime!).inMilliseconds > minStepIntervalMs) {
         _stepCount++;
         _lastStepTime = now;
         _isPeakDetected = true;
@@ -102,7 +102,7 @@ class MotionSensorService {
 
         AppLogger.logger.fine('Step detected! Total: $_stepCount');
       }
-    } else if (magnitude < STEP_THRESHOLD) {
+    } else if (magnitude < stepThreshold) {
       _isPeakDetected = false;
     }
   }

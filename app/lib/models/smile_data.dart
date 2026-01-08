@@ -138,8 +138,8 @@ class SmileFeatures {
 }
 
 class SmileFeatureExtraction {
-  static const double SMILE_THRESHOLD = 50.0;
-  static const double PHASE_DURATION = 15.0; // seconds
+  static const double smileThreshold = 50.0;
+  static const double phaseDuration = 15.0; // seconds
 
   /// Extract features from a single trial
   static SmileFeatures extractTrialFeatures(SmileTrialData trial) {
@@ -148,14 +148,14 @@ class SmileFeatureExtraction {
     final neutralPhase = trial.frames.where((f) => f.phase == 'neutral').toList();
 
     // Duration features
-    final smilingFrames = smilePhase.where((f) => f.smileIndex > SMILE_THRESHOLD).length;
+    final smilingFrames = smilePhase.where((f) => f.smileIndex > smileThreshold).length;
     final smilingDuration = smilingFrames / 30.0; // assuming 30 fps
-    final proportionSmiling = smilingDuration / PHASE_DURATION;
+    final proportionSmiling = smilingDuration / phaseDuration;
 
     // Reaction time: first frame that crosses threshold after smile instruction
-    double timeToSmile = PHASE_DURATION; // default to max if never smiled
+    double timeToSmile = phaseDuration; // default to max if never smiled
     for (var frame in smilePhase) {
-      if (frame.smileIndex > SMILE_THRESHOLD) {
+      if (frame.smileIndex > smileThreshold) {
         timeToSmile = frame.timestamp;
         break;
       }
@@ -166,7 +166,7 @@ class SmileFeatureExtraction {
       return SmileFeatures(
         smilingDuration: 0.0,
         proportionSmiling: 0.0,
-        timeToSmile: PHASE_DURATION,
+        timeToSmile: phaseDuration,
         meanSmileIndex: 0.0,
         maxSmileIndex: 0.0,
         minSmileIndex: 0.0,
@@ -210,7 +210,7 @@ class SmileFeatureExtraction {
       return SmileFeatures(
         smilingDuration: 0.0,
         proportionSmiling: 0.0,
-        timeToSmile: PHASE_DURATION,
+        timeToSmile: phaseDuration,
         meanSmileIndex: 0.0,
         maxSmileIndex: 0.0,
         minSmileIndex: 0.0,

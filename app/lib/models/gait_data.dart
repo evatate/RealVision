@@ -184,12 +184,12 @@ class GaitFeatures {
 }
 
 class GaitFeatureExtraction {
-  static const double GRAVITY = 9.81; // m/s²
-  static const int MIN_FRAMES_FOR_ANALYSIS = 50;
+  static const double gravity = 9.81; // m/s²
+  static const int minFramesForAnalysis = 50;
 
   /// Extract features from a single trial
   static GaitFeatures extractTrialFeatures(GaitTrialData trial) {
-    if (trial.frames.length < MIN_FRAMES_FOR_ANALYSIS || trial.stepCount < 2) {
+    if (trial.frames.length < minFramesForAnalysis || trial.stepCount < 2) {
       return GaitFeatures(
         cadence: 0.0,
         stepTime: 0.0,
@@ -270,7 +270,7 @@ class GaitFeatureExtraction {
     final avgMagnitude = frames.map((f) => f.accelerationMagnitude).reduce((a, b) => a + b) / frames.length;
 
     // Rough estimation: stride length proportional to step time and acceleration
-    return avgStepTime * sqrt(avgMagnitude / GRAVITY) * 100; // normalized scale
+    return avgStepTime * sqrt(avgMagnitude / gravity) * 100; // normalized scale
   }
 
   static double _calculateStrideVariability(List<GaitFrame> frames) {
@@ -287,7 +287,7 @@ class GaitFeatureExtraction {
   }
 
   static double _calculateGaitRegularity(List<GaitFrame> frames) {
-    if (frames.length < MIN_FRAMES_FOR_ANALYSIS) return 0.0;
+    if (frames.length < minFramesForAnalysis) return 0.0;
 
     // Calculate autocorrelation of vertical acceleration (simplified)
     final signal = frames.map((f) => f.accelY).toList();

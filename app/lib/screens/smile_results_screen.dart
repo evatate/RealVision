@@ -12,10 +12,10 @@ class SmileResultsScreen extends StatefulWidget {
   final String? exportPath;
 
   const SmileResultsScreen({
-    Key? key,
+    super.key,
     required this.sessionData,
     this.exportPath,
-  }) : super(key: key);
+  });
 
   @override
   State<SmileResultsScreen> createState() => _SmileResultsScreenState();
@@ -196,7 +196,7 @@ class _SmileResultsScreenState extends State<SmileResultsScreen> {
             style: TextStyle(color: AppColors.textDark, fontSize: 12),
           ),
           SizedBox(height: 2),
-          Container(
+          SizedBox(
             width: double.infinity,
             child: Text(
               value,
@@ -225,7 +225,7 @@ class _SmileResultsScreenState extends State<SmileResultsScreen> {
             style: TextStyle(color: AppColors.textDark, fontSize: 12),
           ),
           SizedBox(height: 2),
-          Container(
+          SizedBox(
             width: double.infinity,
             child: Text(
               value,
@@ -275,6 +275,7 @@ class _SmileResultsScreenState extends State<SmileResultsScreen> {
   void _exportData() async {
     try {
       final file = await _exportService.exportSmileSession(widget.sessionData);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Data exported to: ${file.path.split('/').last}'),
@@ -283,6 +284,7 @@ class _SmileResultsScreenState extends State<SmileResultsScreen> {
       );
     } catch (e) {
       AppLogger.logger.severe('Failed to export data: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to export data'),
@@ -293,6 +295,7 @@ class _SmileResultsScreenState extends State<SmileResultsScreen> {
   }
 
   void _continueToNextTest() {
+    if (!mounted) return;
     Provider.of<TestProgress>(context, listen: false).markSmileCompleted();
     Navigator.of(context).pop();
   }

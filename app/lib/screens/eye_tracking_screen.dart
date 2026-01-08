@@ -31,8 +31,8 @@ class EyeTrackingScreen extends StatefulWidget {
 class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   late CameraService _cameraService = CameraService();
   late AudioService _audioService = AudioService();
-  late EyeTrackingService _eyeTrackingService = EyeTrackingService();
-  late FaceDetectionService _faceDetector = FaceDetectionService();
+  final EyeTrackingService _eyeTrackingService = EyeTrackingService();
+  final FaceDetectionService _faceDetector = FaceDetectionService();
   
   String? _participantId;
 

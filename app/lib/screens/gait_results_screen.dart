@@ -101,7 +101,7 @@ class _GaitResultsScreenState extends State<GaitResultsScreen> {
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withAlpha((0.1 * 255).toInt()),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -136,7 +136,7 @@ class _GaitResultsScreenState extends State<GaitResultsScreen> {
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withAlpha((0.1 * 255).toInt()),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -157,10 +157,10 @@ class _GaitResultsScreenState extends State<GaitResultsScreen> {
                           _buildFeatureRow('Cadence', '${widget.sessionData.features.cadence.toStringAsFixed(1)} steps/min', 'Steps per minute'),
                           _buildFeatureRow('Step Time', '${widget.sessionData.features.stepTime.toStringAsFixed(2)} s', 'Average time per step'),
                           _buildFeatureRow('Step Time Variability', '${(widget.sessionData.features.stepTimeVariability * 100).toStringAsFixed(1)}%', 'Coefficient of variation'),
-                          _buildFeatureRow('Stride Length', '${widget.sessionData.features.strideLength.toStringAsFixed(1)}', 'Estimated normalized stride'),
+                          _buildFeatureRow('Stride Length', widget.sessionData.features.strideLength.toStringAsFixed(1), 'Estimated normalized stride'),
                           _buildFeatureRow('Gait Regularity', '${(widget.sessionData.features.gaitRegularity * 100).toStringAsFixed(1)}%', 'Pattern consistency (0-100%)'),
                           _buildFeatureRow('Gait Symmetry', '${(widget.sessionData.features.gaitSymmetry * 100).toStringAsFixed(1)}%', 'Left-right balance (0-100%)'),
-                          _buildFeatureRow('Acceleration Variability', '${widget.sessionData.features.accelerationVariability.toStringAsFixed(2)}', 'Movement smoothness'),
+                          _buildFeatureRow('Acceleration Variability', widget.sessionData.features.accelerationVariability.toStringAsFixed(2), 'Movement smoothness'),
                           _buildFeatureRow('Gait Quality Score', '${(widget.sessionData.features.gaitQualityScore * 100).toStringAsFixed(1)}%', 'Overall assessment (0-100%)'),
                         ],
                       ),

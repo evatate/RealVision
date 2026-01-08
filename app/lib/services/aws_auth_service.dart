@@ -18,9 +18,9 @@ class AWSAuthService {
   final _secureStorage = const FlutterSecureStorage();
   final _uuid = const Uuid();
   
-  static const String _USER_ID_KEY = 'realvision_user_id';
-  static const String _USER_EMAIL_KEY = 'realvision_user_email';
-  static const String _USER_PASSWORD_KEY = 'realvision_user_password';
+  static const String _userIdKey = 'realvision_user_id';
+  static const String _userEmailKey= 'realvision_user_email';
+  static const String _userPasswordKey = 'realvision_user_password';
   
   Future<void> initialize() async {
     if (_configured) return;
@@ -55,7 +55,7 @@ class AWSAuthService {
         safePrint('User already signed in');
         final user = await Amplify.Auth.getCurrentUser();
         _currentUserId = user.userId;
-        await _secureStorage.write(key: _USER_ID_KEY, value: _currentUserId);
+        await _secureStorage.write(key: _userIdKey, value: _currentUserId);
         await ensureAwsCredentials();
         return _currentUserId;
       }
@@ -63,8 +63,8 @@ class AWSAuthService {
       safePrint('No active session, checking stored credentials...');
       
       // Check if we have stored credentials
-      final existingEmail = await _secureStorage.read(key: _USER_EMAIL_KEY);
-      final existingPassword = await _secureStorage.read(key: _USER_PASSWORD_KEY);
+      final existingEmail = await _secureStorage.read(key: _userEmailKey);
+      final existingPassword = await _secureStorage.read(key: _userPasswordKey);
       
       if (existingEmail != null && existingPassword != null) {
         // Try signing in with existing credentials
@@ -78,7 +78,7 @@ class AWSAuthService {
           if (result.isSignedIn) {
             final user = await Amplify.Auth.getCurrentUser();
             _currentUserId = user.userId;
-            await _secureStorage.write(key: _USER_ID_KEY, value: _currentUserId);
+            await _secureStorage.write(key: _userIdKey, value: _currentUserId);
             
             safePrint('Signed in with existing credentials: $_currentUserId');
             await ensureAwsCredentials();
@@ -138,9 +138,9 @@ class AWSAuthService {
         _currentUserId = user.userId;
         
         // Store credentials securely
-        await _secureStorage.write(key: _USER_ID_KEY, value: _currentUserId);
-        await _secureStorage.write(key: _USER_EMAIL_KEY, value: syntheticEmail);
-        await _secureStorage.write(key: _USER_PASSWORD_KEY, value: securePassword);
+        await _secureStorage.write(key: _userIdKey, value: _currentUserId);
+        await _secureStorage.write(key: _userEmailKey, value: syntheticEmail);
+        await _secureStorage.write(key: _userPasswordKey, value: securePassword);
         
         safePrint('New synthetic user created: $_currentUserId');
         return _currentUserId;
@@ -185,11 +185,11 @@ class AWSAuthService {
     try {
       final user = await Amplify.Auth.getCurrentUser();
       _currentUserId = user.userId;
-      await _secureStorage.write(key: _USER_ID_KEY, value: _currentUserId);
+      await _secureStorage.write(key: _userIdKey, value: _currentUserId);
       return _currentUserId;
     } catch (e) {
       // Fallback to stored ID
-      _currentUserId = await _secureStorage.read(key: _USER_ID_KEY);
+      _currentUserId = await _secureStorage.read(key: _userIdKey);
       return _currentUserId;
     }
   }
@@ -214,17 +214,14 @@ class AWSAuthService {
       }
 
       // Check if identity pool credentials are available
-      if (session.identityIdResult.value != null) {
-        AppLogger.logger.info('Identity ID: ${session.identityIdResult.value}');
+      AppLogger.logger.info('Identity ID: ${session.identityIdResult.value}');
 
-        // Check if AWS credentials are available
-        if (session.credentialsResult.value != null) {
-          AppLogger.logger.info('AWS credentials available for service calls');
-        } else {
-          AppLogger.logger.warning('AWS credentials not yet available');
-        }
-      } else {
-        AppLogger.logger.warning('No identity ID available');
+      // Check if AWS credentials are available
+      try {
+        session.credentialsResult.value;
+        AppLogger.logger.info('AWS credentials available for service calls');
+      } catch (e) {
+        AppLogger.logger.warning('AWS credentials not yet available');
       }
     } catch (e) {
       if (e.toString().contains('No identity pool registered') ||
@@ -245,12 +242,8 @@ class AWSAuthService {
       throw Exception('User is not signed in');
     }
 
-    final identityId = session.identityIdResult.value;
-    if (identityId == null) {
-      throw Exception('No identity ID available. Is your Identity Pool configured?');
-    }
-
-    return identityId;
+    // identityIdResult.value is non-nullable; just return it
+    return session.identityIdResult.value;
   }
   
   /// Get AWS credentials for direct API calls (access key, secret key, session token)
@@ -258,14 +251,14 @@ class AWSAuthService {
     try {
       final session = await Amplify.Auth.fetchAuthSession() as CognitoAuthSession;
 
-      if (session.credentialsResult.value != null) {
-        final credentials = session.credentialsResult.value!;
+      try {
+        final credentials = session.credentialsResult.value;
         return {
           'accessKeyId': credentials.accessKeyId,
           'secretAccessKey': credentials.secretAccessKey,
           'sessionToken': credentials.sessionToken ?? '',
         };
-      } else {
+      } catch (e) {
         safePrint('No AWS credentials available');
         return null;
       }
@@ -301,9 +294,9 @@ class AWSAuthService {
       _currentUserId = null;
       
       // Clear ALL stored credentials
-      await _secureStorage.delete(key: _USER_ID_KEY);
-      await _secureStorage.delete(key: _USER_EMAIL_KEY);
-      await _secureStorage.delete(key: _USER_PASSWORD_KEY);
+      await _secureStorage.delete(key: _userIdKey);
+      await _secureStorage.delete(key: _userEmailKey);
+      await _secureStorage.delete(key: _userPasswordKey);
       
       safePrint('User signed out and data cleared');
     } catch (e) {
@@ -313,6 +306,6 @@ class AWSAuthService {
   
   /// Get synthetic email (for debugging only, never show to user)
   Future<String?> getSyntheticEmail() async {
-    return await _secureStorage.read(key: _USER_EMAIL_KEY);
+    return await _secureStorage.read(key: _userEmailKey);
   }
 }

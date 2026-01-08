@@ -35,7 +35,6 @@ class EyeTrackingService {
   final List<EyeTrackingFrame> _eyeTrackingFrames = [];
   DateTime? _trialStartTime;
   String _currentTaskType = 'fixation';
-  Offset _currentTargetPosition = Offset.zero;
 
   // Drift correction variables
   Offset _driftOffset = Offset.zero;
@@ -52,8 +51,6 @@ class EyeTrackingService {
 
   // Stability
   EyeTrackingFrame? _lastFrame;
-  int _lastResultAge = 0;
-  static const int _maxResultAge = 5;
   
   EyeTrackingService() {
     _faceDetector = FaceDetector(
@@ -73,10 +70,6 @@ class EyeTrackingService {
 
   void setTaskType(String taskType) {
     _currentTaskType = taskType;
-  }
-
-  void setTargetPosition(Offset position) {
-    _currentTargetPosition = position;
   }
 
   void startTrial() {
