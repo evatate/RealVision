@@ -7,6 +7,8 @@ import '../services/camera_service.dart';
 import '../services/audio_service.dart';
 import '../services/face_detection_service.dart';
 import '../services/eye_tracking_service.dart';
+import '../models/eye_tracking_data.dart';
+import '../services/data_export_service.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../widgets/breadcrumb.dart';
@@ -15,6 +17,7 @@ import 'dart:async';
 import 'dart:math';
 import '../services/service_locator.dart';
 import 'package:google_mlkit_commons/google_mlkit_commons.dart';
+import 'eye_tracking_results_screen.dart';
 
 enum EyeTrackingTask { none, fixation, prosaccade, pursuit, driftCorrection }
 
@@ -31,6 +34,8 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   late EyeTrackingService _eyeTrackingService = EyeTrackingService();
   late FaceDetectionService _faceDetector = FaceDetectionService();
   
+  String? _participantId;
+
   EyeTrackingTask _currentTask = EyeTrackingTask.none;
   int _trialNumber = 0;
   bool _isPractice = false;
@@ -43,7 +48,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   bool _isDriftCorrecting = false;
   List<int> _prosaccadeSequence = [];
   int _prosaccadeIndex = 0;
-  List<double> _trialQualityScores = [];
+  List<EyeTrackingTrialData> _trials = [];
   Size _screenSize = Size.zero;
   bool _isProcessingFrame = false;
 
@@ -58,7 +63,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   Future<void> _initializeServices() async {
     try {
       await _audioService.initialize();
-      // Initialize camera once and reuse it
       await _cameraService.initialize();
       if (mounted) {
         setState(() => _cameraInitialized = true);
@@ -70,12 +74,10 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
 
   @override
   void dispose() {
-    // Disable high-frequency processing
     _eyeTrackingService.setAssessmentActive(false);
-    
     _taskTimer?.cancel();
     _eyeTrackingTimer?.cancel();
-    _stopEyeTracking(); // Stop eye tracking and disable assessment mode
+    _stopEyeTracking();
     _cameraService.dispose();
     _audioService.dispose();
     _eyeTrackingService.dispose();
@@ -83,15 +85,11 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     super.dispose();
   }
 
-  // Generate randomized pro-saccade sequence
   void _generateProsaccadeSequence() {
-    // 8 positions (excluding center): left, right, up, down + 4 diagonals
     final positions = [0, 1, 2, 3, 4, 5, 6, 7];
     final random = Random();
     _prosaccadeSequence = [];
     
-    // Create 40 trials with proper randomization
-    // Rule: same position cannot appear twice in a row
     int lastPosition = -1;
     for (int i = 0; i < 40; i++) {
       List<int> available = positions.where((p) => p != lastPosition).toList();
@@ -103,24 +101,22 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   }
 
   Offset _getProsaccadePosition(int index) {
-    // 8 positions at ~10° visual angle from center (approx 0.17 normalized units)
     const double distance = 0.17;
     const positions = [
-      Offset(0.5 - distance, 0.5),      // 0: Left
-      Offset(0.5 + distance, 0.5),      // 1: Right
-      Offset(0.5, 0.5 - distance),      // 2: Up
-      Offset(0.5, 0.5 + distance),      // 3: Down
-      Offset(0.5 - distance * 0.707, 0.5 - distance * 0.707), // 4: Top-left
-      Offset(0.5 + distance * 0.707, 0.5 - distance * 0.707), // 5: Top-right
-      Offset(0.5 - distance * 0.707, 0.5 + distance * 0.707), // 6: Bottom-left
-      Offset(0.5 + distance * 0.707, 0.5 + distance * 0.707), // 7: Bottom-right
+      Offset(0.5 - distance, 0.5),
+      Offset(0.5 + distance, 0.5),
+      Offset(0.5, 0.5 - distance),
+      Offset(0.5, 0.5 + distance),
+      Offset(0.5 - distance * 0.707, 0.5 - distance * 0.707),
+      Offset(0.5 + distance * 0.707, 0.5 - distance * 0.707),
+      Offset(0.5 - distance * 0.707, 0.5 + distance * 0.707),
+      Offset(0.5 + distance * 0.707, 0.5 + distance * 0.707),
     ];
     return positions[index];
   }
 
-  // Drift correction before each trial
   Future<void> _performDriftCorrection() async {
-    final originalTask = _currentTask; // Save current task
+    final originalTask = _currentTask;
     
     setState(() {
       _isDriftCorrecting = true;
@@ -131,47 +127,38 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     
     await _audioService.speak('Look at the center cross');
     
-    // Collect calibration data for 2 seconds
     _eyeTrackingService.startDriftCorrection();
     await Future.delayed(const Duration(seconds: 2));
     _eyeTrackingService.finalizeDriftCorrection();
     
     setState(() {
       _isDriftCorrecting = false;
-      _currentTask = originalTask; // Restore original task
+      _currentTask = originalTask;
     });
   }
 
-  // Check trial quality
-  bool _checkTrialQuality(List<GazePoint> trialData) {
+  bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
     if (trialData.length < 5) return false;
-    
-    // Calculate percentage of valid gaze points (face detected)
+
     final validPoints = trialData.length;
     const requiredPoints = 5;
-    
+
     if (validPoints < requiredPoints) return false;
-    
-    // Check if user was looking roughly near targets
+
     final meanDistance = trialData.map((p) => p.distance).reduce((a, b) => a + b) / trialData.length;
-    
-    // Store quality score
-    _trialQualityScores.add(1.0 - meanDistance);
-    
-    // Different thresholds for different tasks
+
     double threshold;
     switch (_currentTask) {
       case EyeTrackingTask.prosaccade:
-        threshold = 0.4;
+        threshold = 0.5;
         break;
       case EyeTrackingTask.pursuit:
-        threshold = 0.4;
+        threshold = 0.5;
         break;
       default:
-        threshold = 0.25;
+        threshold = 0.35;
     }
-    
-    // Trial passes if mean distance < threshold
+
     return meanDistance < threshold;
   }
 
@@ -210,17 +197,34 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                Navigator.pop(context); // Close dialog
-                // Start the next test in sequence
+                Navigator.pop(context);
                 if (testType == 'fixation') {
                   _startProsaccadeTest();
                 } else if (testType == 'prosaccade') {
                   _startSmoothPursuitTest();
                 } else if (testType == 'all') {
-                  // Return to main home screen
-                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  final features = EyeTrackingFeatureExtraction.extractSessionFeatures(
+                    EyeTrackingSessionData(
+                      participantId: _participantId!,
+                      sessionId: 'temp',
+                      timestamp: DateTime.now(),
+                      trials: _trials,
+                      features: EyeTrackingFeatureExtraction.getEmptyFeatures(),
+                    ),
+                  );
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (context) => const EyeTrackingResultsScreen(),
+                      settings: RouteSettings(arguments: EyeTrackingSessionData(
+                        participantId: _participantId!,
+                        sessionId: 'eye_tracking_${DateTime.now().millisecondsSinceEpoch}',
+                        timestamp: DateTime.now(),
+                        trials: _trials,
+                        features: features,
+                      )),
+                    ),
+                  );
                 } else {
-                  // For any other case, return to test selection
                   setState(() {
                     _currentTask = EyeTrackingTask.none;
                     _trialNumber = 0;
@@ -233,7 +237,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
                 padding: EdgeInsets.all(16),
               ),
               child: Text(
-                testType == 'all' ? 'Return to Test Screen' : 'Continue with Next Test',
+                testType == 'all' ? 'View Results' : 'Continue with Next Test',
                 style: TextStyle(fontSize: 18, color: Colors.white),
                 textAlign: TextAlign.center,
               ),
@@ -245,7 +249,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             child: OutlinedButton(
               onPressed: () {
                 Navigator.pop(context);
-                // Return to test selection screen
                 setState(() {
                   _currentTask = EyeTrackingTask.none;
                   _trialNumber = 0;
@@ -337,6 +340,10 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   }
 
   Future<void> _startFixationTest() async {
+    // Initialize participant ID for the session
+    _participantId ??= 'participant_${DateTime.now().millisecondsSinceEpoch}';
+    _trials = []; // Reset trials for new session
+
     _showInstructions(
       'Fixation Stability Test',
       'Look closely at the red cross without blinking for 10 seconds',
@@ -352,7 +359,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             _trialNumber = 0;
             _showTarget = true;
             _targetPosition = const Offset(0.5, 0.5);
-            _trialQualityScores = [];
           });
           
           _startEyeTracking();
@@ -368,43 +374,30 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   }
 
   void _stopEyeTracking() {
-    // Disable high-frequency processing
     _eyeTrackingService.setAssessmentActive(false);
-    
     _eyeTrackingTimer?.cancel();
     _cameraService.stopImageStream();
-    _isProcessingFrame = false; // Reset processing flag
+    _isProcessingFrame = false;
   }
 
   void _startEyeTracking() {
-    // Enable high-frequency processing for assessment
     _eyeTrackingService.setAssessmentActive(true);
-    
+
     _cameraService.startImageStream((CameraImage image, InputImageRotation rotation) async {
       if (!mounted || _targetPosition == null || _isProcessingFrame) return;
-      
-      // Set processing flag to prevent overlapping frame processing
+
       _isProcessingFrame = true;
-      
+
       try {
-        // First check if face is detected using the reliable face detection service
         final faceResult = await _faceDetector.detectFace(image, rotation);
         final faceDetected = faceResult.faceDetected;
-        
-        AppLogger.logger.fine('Face detection result: faceDetected=$faceDetected');
-        
+
         setState(() => _isFaceDetected = faceDetected);
-        
+
         if (faceDetected) {
-          // Only attempt eye tracking if face is detected
-          final result = await _eyeTrackingService.trackGaze(image, _targetPosition!, _screenSize, rotation);
-          AppLogger.logger.fine('Eye tracking result: ${result != null ? 'success' : 'failed'}');
-          if (result != null) {
-            _eyeTrackingService.recordGazePoint(result);
-          }
+          await _eyeTrackingService.trackGaze(image, _targetPosition!, _screenSize, rotation);
         }
       } finally {
-        // Always reset the processing flag
         _isProcessingFrame = false;
       }
     });
@@ -434,21 +427,34 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
 
     _trialNumber++;
     _eyeTrackingService.clearData();
+    _eyeTrackingService.setTaskType('fixation');
+    _eyeTrackingService.startTrial();
     setState(() => _targetPosition = const Offset(0.5, 0.5));
     
     _taskTimer = Timer(Duration(seconds: AppConstants.fixationDuration), () {
-      // Check trial quality
-      final trialData = _eyeTrackingService.getGazeData();
-      final qualityOk = _checkTrialQuality(trialData);
-      
+      final trialResult = _eyeTrackingService.completeTrial();
+      final qualityOk = _checkTrialQuality(trialResult.frames);
+
       if (!qualityOk && !_isPractice) {
         _audioService.speak('Trial quality low. Repeating trial.');
-        _trialNumber--; // Repeat this trial
+        _trialNumber--;
+        _eyeTrackingService.clearData();
         Future.delayed(const Duration(seconds: 2), () async {
           await _performDriftCorrection();
           _runFixationTrial();
         });
         return;
+      }
+
+      if (qualityOk && !_isPractice) {
+        final updatedTrial = EyeTrackingTrialData(
+          trialNumber: _trials.length + 1,
+          taskType: 'fixation',
+          frames: trialResult.frames,
+          qualityScore: trialResult.qualityScore,
+        );
+        _trials.add(updatedTrial);
+        AppLogger.logger.info('Added fixation trial ${_trials.length} with ${trialResult.frames.length} frames');
       }
       
       if (_trialNumber < maxTrials) {
@@ -465,15 +471,13 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   }
 
   void _completeFixationTest() {
-    final metrics = _eyeTrackingService.getFixationMetrics();
-    AppLogger.logger.info('Fixation metrics: $metrics');
-    AppLogger.logger.info('Trial quality scores: $_trialQualityScores');
-    
-    _stopEyeTracking(); // Stop eye tracking and disable assessment mode
+    _stopEyeTracking();
     _eyeTrackingService.clearData();
-    
+
     Provider.of<TestProgress>(context, listen: false).markFixationCompleted();
-    
+
+    AppLogger.logger.info('Fixation test complete. Total trials collected: ${_trials.length}');
+
     _showTestCompletionDialog('Fixation Stability Test Complete!', 'fixation');
   }
 
@@ -485,14 +489,12 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         try {
           if (!mounted) return;
           
-          // Generate randomized sequence for 40 trials
           _generateProsaccadeSequence();
           
           setState(() {
             _currentTask = EyeTrackingTask.prosaccade;
             _isPractice = true;
             _trialNumber = 0;
-            _trialQualityScores = [];
           });
           
           _startEyeTracking();
@@ -511,13 +513,13 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     final maxTrials = _isPractice
         ? AppConstants.prosaccadePracticeTrials
         : AppConstants.prosaccadeTestTrials;
-    
+  
     if (_trialNumber >= maxTrials) {
       if (_isPractice) {
         setState(() {
           _isPractice = false;
           _trialNumber = 0;
-          _prosaccadeIndex = 0; // Reset for test trials
+          _prosaccadeIndex = 0;
         });
         _audioService.speak('Practice complete. Starting 40 test trials.');
         Future.delayed(const Duration(seconds: 2), () async {
@@ -525,41 +527,56 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
           _runProsaccadeTrial();
         });
       } else {
-        final metrics = _eyeTrackingService.getProsaccadeMetrics();
-        AppLogger.logger.info('Pro-saccade metrics: $metrics');
-        AppLogger.logger.info('Trial quality scores: $_trialQualityScores');
-        
-        _stopEyeTracking(); // Stop eye tracking and disable assessment mode
+        _stopEyeTracking();
         _eyeTrackingService.clearData();
-        
+
+        final sessionData = EyeTrackingSessionData(
+          participantId: _participantId!,
+          sessionId: 'eye_tracking_${DateTime.now().millisecondsSinceEpoch}',
+          timestamp: DateTime.now(),
+          trials: _trials,
+          features: EyeTrackingFeatureExtraction.extractSessionFeatures(
+            EyeTrackingSessionData(
+              participantId: _participantId!,
+              sessionId: 'temp',
+              timestamp: DateTime.now(),
+              trials: _trials,
+              features: EyeTrackingFeatureExtraction.getEmptyFeatures(),
+            ),
+          ),
+        );
+
         Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
-        
+
+        final dataExportService = getIt<DataExportService>();
+        try {
+          dataExportService.exportEyeTrackingSession(sessionData);
+          AppLogger.logger.info('Eye tracking session data exported successfully');
+        } catch (e) {
+          AppLogger.logger.warning('Failed to export eye tracking session data: $e');
+        }
         _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
       }
       return;
     }
 
-    // Show central fixation point
     setState(() {
       _targetPosition = const Offset(0.5, 0.5);
       _showTarget = true;
     });
     
-    // Central fixation: 800-1200ms (randomized)
     final fixationDuration = 800 + Random().nextInt(400);
     
     Future.delayed(Duration(milliseconds: fixationDuration), () {
       if (!mounted || _currentTask != EyeTrackingTask.prosaccade) return;
       
-      // GAP period: 200ms blank screen
       setState(() => _showTarget = false);
       
       Future.delayed(const Duration(milliseconds: 200), () {
         if (!mounted || _currentTask != EyeTrackingTask.prosaccade) return;
         
-        // Show peripheral target using randomized sequence
         final pos = _isPractice 
-            ? _getProsaccadePosition(_trialNumber % 8) // Practice uses simple cycling
+            ? _getProsaccadePosition(_trialNumber % 8)
             : _getProsaccadePosition(_prosaccadeSequence[_prosaccadeIndex]);
         
         setState(() {
@@ -567,27 +584,37 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
           _showTarget = true;
           _trialNumber++;
         });
-        
+
+        _eyeTrackingService.setTaskType('prosaccade');
+        _eyeTrackingService.startTrial();
+
         if (!_isPractice) _prosaccadeIndex++;
         
-        // Target visible for 1000ms
         Future.delayed(const Duration(milliseconds: 1000), () {
-          // Check trial quality
-          final trialData = _eyeTrackingService.getGazeData();
-          final qualityOk = _checkTrialQuality(trialData);
-          
+          final trialResult = _eyeTrackingService.completeTrial();
+          final qualityOk = _checkTrialQuality(trialResult.frames);
+
           if (!qualityOk && !_isPractice) {
             _audioService.speak('Trial quality low. Repeating trial.');
-            _trialNumber--; // Repeat this trial
+            _trialNumber--;
             if (!_isPractice) _prosaccadeIndex--;
             Future.delayed(const Duration(milliseconds: 500), () async {
               await _performDriftCorrection();
               _runProsaccadeTrial();
             });
           } else {
-            // Inter-trial interval: 500ms
+            if (qualityOk && !_isPractice) {
+              final updatedTrial = EyeTrackingTrialData(
+                trialNumber: _trials.length + 1,
+                taskType: 'prosaccade',
+                frames: trialResult.frames,
+                qualityScore: trialResult.qualityScore,
+              );
+              _trials.add(updatedTrial);
+              AppLogger.logger.info('Added prosaccade trial ${_trials.length} with ${trialResult.frames.length} frames');
+            }
+
             Future.delayed(const Duration(milliseconds: 500), () async {
-              // Drift correction every 5 trials
               if (_trialNumber % 5 == 0) {
                 await _performDriftCorrection();
               }
@@ -600,6 +627,9 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   }
 
   Future<void> _startSmoothPursuitTest() async {
+    // Initialize participant ID if not already set
+    _participantId ??= 'participant_${DateTime.now().millisecondsSinceEpoch}';
+
     _showInstructions(
       'Smooth Pursuit Test',
       'Follow the red circle with your eyes as closely as possible',
@@ -611,7 +641,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             _currentTask = EyeTrackingTask.pursuit;
             _isPractice = true;
             _trialNumber = 0;
-            _trialQualityScores = [];
           });
           
           _startEyeTracking();
@@ -643,15 +672,35 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
           _runPursuitTrial();
         });
       } else {
-        final metrics = _eyeTrackingService.getSmoothPursuitMetrics();
-        AppLogger.logger.info('Smooth pursuit metrics: $metrics');
-        AppLogger.logger.info('Trial quality scores: $_trialQualityScores');
-        
-        _stopEyeTracking(); // Stop eye tracking and disable assessment mode
+        _stopEyeTracking();
         _eyeTrackingService.clearData();
-        
+
+        final sessionData = EyeTrackingSessionData(
+          participantId: _participantId!,
+          sessionId: 'eye_tracking_${DateTime.now().millisecondsSinceEpoch}',
+          timestamp: DateTime.now(),
+          trials: _trials,
+          features: EyeTrackingFeatureExtraction.extractSessionFeatures(
+            EyeTrackingSessionData(
+              participantId: _participantId!,
+              sessionId: 'temp',
+              timestamp: DateTime.now(),
+              trials: _trials,
+              features: EyeTrackingFeatureExtraction.getEmptyFeatures(),
+            ),
+          ),
+        );
+
         Provider.of<TestProgress>(context, listen: false).markPursuitCompleted();
-        
+
+        final dataExportService = getIt<DataExportService>();
+        try {
+          dataExportService.exportEyeTrackingSession(sessionData);
+          AppLogger.logger.info('Eye tracking session data exported successfully');
+        } catch (e) {
+          AppLogger.logger.warning('Failed to export eye tracking session data: $e');
+        }
+
         _showTestCompletionDialog('All Eye Tracking Tests Complete!', 'all');
       }
       return;
@@ -661,8 +710,9 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     final speed = _trialNumber % 4 < 2 ? 10 : 20;
     final frequency = speed == 10 ? 0.25 : 0.5;
     
-    // Clear trial data
     _eyeTrackingService.clearData();
+    _eyeTrackingService.setTaskType('pursuit');
+    _eyeTrackingService.startTrial();
     
     setState(() {
       _targetPosition = const Offset(0.5, 0.5);
@@ -685,9 +735,8 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         if (elapsed > 10) {
           timer.cancel();
           
-          // Check trial quality
-          final trialData = _eyeTrackingService.getGazeData();
-          final qualityOk = _checkTrialQuality(trialData);
+          final trialResult = _eyeTrackingService.completeTrial();
+          final qualityOk = _checkTrialQuality(trialResult.frames);
           
           if (!qualityOk && !_isPractice) {
             _audioService.speak('Trial quality low. Repeating trial.');
@@ -696,6 +745,17 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
               _runPursuitTrial();
             });
           } else {
+            if (qualityOk && !_isPractice) {
+              final updatedTrial = EyeTrackingTrialData(
+                trialNumber: _trials.length + 1,
+                taskType: 'pursuit',
+                frames: trialResult.frames,
+                qualityScore: trialResult.qualityScore,
+              );
+              _trials.add(updatedTrial);
+              AppLogger.logger.info('Added pursuit trial ${_trials.length} with ${trialResult.frames.length} frames');
+            }
+
             setState(() => _trialNumber++);
             Future.delayed(const Duration(seconds: 1), () async {
               await _performDriftCorrection();
@@ -874,7 +934,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
             ),
           ),
         
-        // Home button during tests
         Positioned(
           top: 16,
           left: 16,
@@ -986,11 +1045,11 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     switch (_currentTask) {
       case EyeTrackingTask.fixation:
       case EyeTrackingTask.driftCorrection:
-        return 80.0; // Cross target
+        return 80.0;
       case EyeTrackingTask.prosaccade:
-        return 50.0; // ~1° visual angle circle
+        return 50.0;
       case EyeTrackingTask.pursuit:
-        return 40.0; // ~0.8° visual angle circle
+        return 40.0;
       default:
         return 40.0;
     }

@@ -43,7 +43,6 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
 
   // Data collection for feature extraction
   String? _participantId;
-  DateTime? _sessionStartTime;
   List<SmileTrialData> _collectedTrials = [];
   List<SmileFrame> _currentTrialFrames = [];
   Stopwatch? _trialStopwatch;
@@ -136,7 +135,6 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
 
       // Initialize data collection
       _participantId = 'participant_${DateTime.now().millisecondsSinceEpoch}';
-      _sessionStartTime = DateTime.now();
       _collectedTrials = [];
       _currentTrialFrames = [];
       _trialStopwatch = Stopwatch();

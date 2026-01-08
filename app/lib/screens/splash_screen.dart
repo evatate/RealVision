@@ -60,7 +60,7 @@ class _SplashScreenState extends State<SplashScreen> {
     } catch (e) {
       AppLogger.logger.severe('Initialization error: $e');
       
-      // Still respect minimum duration
+      // minimum duration
       final elapsed = DateTime.now().difference(startTime);
       if (elapsed < minSplashDuration) {
         await Future.delayed(minSplashDuration - elapsed);
@@ -77,7 +77,7 @@ class _SplashScreenState extends State<SplashScreen> {
       _instructionsSpoken = true;
       await audioService.speak(
         'Complete all four tests. '
-        'Start with the walking test. '
+        'Complete the eye tracking tests in order'
         'Find a quiet, well lit space. '
         'Follow the audio instructions. '
         'Press Start Assessment to begin.'
@@ -187,7 +187,7 @@ class _SplashScreenState extends State<SplashScreen> {
                         SizedBox(height: 16),
                         _buildInstruction('1', 'Complete all 4 tests'),
                         SizedBox(height: 12),
-                        _buildInstruction('2', 'Start with Walking Test'),
+                        _buildInstruction('2', 'Do eye tests in order'),
                         SizedBox(height: 12),
                         _buildInstruction('3', 'Find a quiet, well-lit space'),
                         SizedBox(height: 12),

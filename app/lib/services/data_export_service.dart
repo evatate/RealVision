@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
 import '../models/smile_data.dart';
 import '../models/gait_data.dart';
+import '../models/eye_tracking_data.dart';
 import '../utils/logger.dart';
 import 'aws_storage_service.dart';
 
@@ -92,6 +93,46 @@ class DataExportService {
     return files;
   }
 
+  /// Export a single eye tracking session to JSON file
+  Future<File> exportEyeTrackingSession(EyeTrackingSessionData session) async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final filename = 'eye_tracking_${session.participantId}_${session.timestamp.toIso8601String().split('T')[0]}.json';
+      final file = File('${directory.path}/$filename');
+
+      final jsonString = jsonEncode(session.toJson());
+      await file.writeAsString(jsonString);
+
+      AppLogger.logger.info('Exported eye tracking session to: ${file.path}');
+
+      // Also upload to S3 if available
+      if (_awsStorage != null) {
+        try {
+          final s3Key = await _awsStorage!.uploadFile(file.path, 'eye_tracking');
+          if (s3Key != null) {
+            AppLogger.logger.info('Eye tracking session uploaded to S3: $s3Key');
+          }
+        } catch (e) {
+          AppLogger.logger.warning('Failed to upload to S3, but local export succeeded: $e');
+        }
+      }
+
+      return file;
+    } catch (e) {
+      AppLogger.logger.severe('Error exporting eye tracking session: $e');
+      rethrow;
+    }
+  }
+
+  /// Export multiple eye tracking sessions
+  Future<List<File>> exportEyeTrackingSessions(List<EyeTrackingSessionData> sessions) async {
+    final files = <File>[];
+    for (var session in sessions) {
+      files.add(await exportEyeTrackingSession(session));
+    }
+    return files;
+  }
+
   /// Load a smile session from JSON file
   Future<SmileSessionData?> loadSmileSession(String filePath) async {
     try {
@@ -118,6 +159,21 @@ class DataExportService {
       return GaitSessionData.fromJson(jsonData);
     } catch (e) {
       AppLogger.logger.severe('Error loading gait session: $e');
+      return null;
+    }
+  }
+
+  /// Load an eye tracking session from JSON file
+  Future<EyeTrackingSessionData?> loadEyeTrackingSession(String filePath) async {
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) return null;
+
+      final jsonString = await file.readAsString();
+      final jsonData = jsonDecode(jsonString);
+      return EyeTrackingSessionData.fromJson(jsonData);
+    } catch (e) {
+      AppLogger.logger.severe('Error loading eye tracking session: $e');
       return null;
     }
   }
