@@ -9,7 +9,6 @@ import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../utils/logger.dart';
 import '../widgets/breadcrumb.dart';
-
 class SpeechTestScreen extends StatefulWidget {
   const SpeechTestScreen({super.key});
 
@@ -155,6 +154,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     }
     
     try {
+
       // Upload to AWS S3
       setState(() => _transcriptionStatus = 'Uploading audio to secure storage...');
       final s3Key = await _awsStorage.uploadAudioFile(recordingPath);

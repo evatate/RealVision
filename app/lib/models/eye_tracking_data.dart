@@ -1,9 +1,8 @@
 import 'dart:math';
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import '../utils/logger.dart';
 
-/// Data models for eye tracking feature extraction based on clinical papers
+/// Fixed data models for eye tracking feature extraction based on clinical papers
 
 class EyeTrackingSessionData {
   final String participantId;
@@ -41,7 +40,7 @@ class EyeTrackingSessionData {
 
 class EyeTrackingTrialData {
   final int trialNumber;
-  final String taskType; // 'fixation', 'prosaccade', 'pursuit'
+  final String taskType;
   final List<EyeTrackingFrame> frames;
   final double qualityScore;
 
@@ -70,10 +69,10 @@ class EyeTrackingTrialData {
 }
 
 class EyeTrackingFrame {
-  final double timestamp; // seconds from trial start
+  final double timestamp;
   final Offset eyePosition;
   final Offset targetPosition;
-  final double distance; // distance between eye and target
+  final double distance;
   final double headPoseX;
   final double headPoseY;
   final double headPoseZ;
@@ -112,25 +111,18 @@ class EyeTrackingFrame {
 }
 
 class EyeTrackingFeatures {
-  // Fixation stability metrics
-  final double fixationStability; // RMS error during fixation task (0-1, higher is better)
-  final double fixationDuration; // max time maintaining fixation (seconds)
-  final int largeIntrusiveSaccades; // count of large unwanted saccades during fixation
-  final int squareWaveJerks; // count of square wave jerks during fixation
-
-  // Saccade metrics (pro-saccade task)
-  final double saccadeLatency; // average reaction time to target jump (ms)
-  final double saccadeAccuracy; // success rate reaching targets (0-1)
-  final double meanSaccadesPerTrial; // average number of saccades per trial
-
-  // Smooth pursuit metrics
-  final double pursuitGain; // ratio of eye velocity to target velocity
-  final double proportionPursuing; // proportion of time actively pursuing (0-1)
-  final int catchUpSaccades; // count of corrective saccades during pursuit
-
-  // Overall performance
-  final double overallAccuracy; // combined accuracy across all tasks (0-1)
-  final double taskCompletionRate; // percentage of trials completed successfully (0-1)
+  final double fixationStability;
+  final double fixationDuration;
+  final int largeIntrusiveSaccades;
+  final int squareWaveJerks;
+  final double saccadeLatency;
+  final double saccadeAccuracy;
+  final double meanSaccadesPerTrial;
+  final double pursuitGain;
+  final double proportionPursuing;
+  final int catchUpSaccades;
+  final double overallAccuracy;
+  final double taskCompletionRate;
 
   EyeTrackingFeatures({
     required this.fixationStability,
@@ -181,36 +173,32 @@ class EyeTrackingFeatures {
 }
 
 class EyeTrackingFeatureExtraction {
-  static const double fixationThreshold = 0.25;
-  static const int minFramesForAnalysis = 5;
+  static const double fixationThreshold = 0.15; // Tightened from 0.25
+  static const int minFramesForAnalysis = 30; // Increased from 5
+  
+  // Physiologically plausible ranges
+  static const double minSaccadeLatency = 150.0; // ms - minimum human reaction time
+  static const double maxSaccadeLatency = 800.0; // ms - maximum reasonable latency
+  static const double saccadeVelocityThreshold = 0.05; // Movement threshold for saccade detection
+  static const double pursuitVelocityThreshold = 0.02; // Minimum velocity for pursuit
 
-  /// Extract aggregate features across all trials - THIS IS THE MAIN METHOD
   static EyeTrackingFeatures extractSessionFeatures(EyeTrackingSessionData session) {
     if (session.trials.isEmpty) {
       return getEmptyFeatures();
     }
 
-    AppLogger.logger.info('DEBUG: Extracting features from ${session.trials.length} trials');
+    AppLogger.logger.info('=== EXTRACTING FEATURES FROM ${session.trials.length} TRIALS ===');
 
-    // Separate trials by task type
     final fixationTrials = session.trials.where((t) => t.taskType == 'fixation').toList();
     final prosaccadeTrials = session.trials.where((t) => t.taskType == 'prosaccade').toList();
     final pursuitTrials = session.trials.where((t) => t.taskType == 'pursuit').toList();
 
-    AppLogger.logger.info('DEBUG: Fixation trials: ${fixationTrials.length}');
-    AppLogger.logger.info('DEBUG: Prosaccade trials: ${prosaccadeTrials.length}');
-    AppLogger.logger.info('DEBUG: Pursuit trials: ${pursuitTrials.length}');
+    AppLogger.logger.info('Fixation: ${fixationTrials.length}, Prosaccade: ${prosaccadeTrials.length}, Pursuit: ${pursuitTrials.length}');
 
-    // Extract metrics using the WORKING methods from original code
     final fixationMetrics = _getFixationMetrics(fixationTrials);
     final prosaccadeMetrics = _getProsaccadeMetrics(prosaccadeTrials);
     final pursuitMetrics = _getSmoothPursuitMetrics(pursuitTrials);
 
-    AppLogger.logger.info('DEBUG: Fixation metrics: $fixationMetrics');
-    AppLogger.logger.info('DEBUG: Prosaccade metrics: $prosaccadeMetrics');
-    AppLogger.logger.info('DEBUG: Pursuit metrics: $pursuitMetrics');
-
-    // Calculate overall metrics
     final overallAccuracy = _calculateOverallAccuracy(
       fixationMetrics['meanDistance'] ?? 1.0,
       prosaccadeMetrics['accuracy'] ?? 0.0,
@@ -218,6 +206,13 @@ class EyeTrackingFeatureExtraction {
     );
 
     final taskCompletionRate = session.trials.where((t) => t.qualityScore > 0.5).length / session.trials.length;
+
+    AppLogger.logger.info('=== FINAL FEATURES ===');
+    AppLogger.logger.info('Fixation stability: ${(1.0 - (fixationMetrics['meanDistance'] ?? 1.0)).toStringAsFixed(3)}');
+    AppLogger.logger.info('Saccade latency: ${prosaccadeMetrics['meanLatency']?.toStringAsFixed(1) ?? 0} ms');
+    AppLogger.logger.info('Saccade accuracy: ${((prosaccadeMetrics['accuracy'] ?? 0.0) * 100).toStringAsFixed(1)}%');
+    AppLogger.logger.info('Pursuit gain: ${pursuitMetrics['pursuitGain']?.toStringAsFixed(2) ?? 0}');
+    AppLogger.logger.info('Task completion: ${(taskCompletionRate * 100).toStringAsFixed(1)}%');
 
     return EyeTrackingFeatures(
       fixationStability: 1.0 - (fixationMetrics['meanDistance'] ?? 1.0),
@@ -246,7 +241,6 @@ class EyeTrackingFeatureExtraction {
       };
     }
 
-    // Combine all frames from all fixation trials
     final allFrames = <EyeTrackingFrame>[];
     for (final trial in trials) {
       allFrames.addAll(trial.frames);
@@ -262,8 +256,7 @@ class EyeTrackingFeatureExtraction {
       };
     }
 
-    // Count large intrusive saccades (movements > 5% of screen during fixation)
-    // Only count distinct saccades, not every frame of a saccade
+    // Count large intrusive saccades (>5% screen movement)
     int largeIntrusiveSaccades = 0;
     bool inSaccade = false;
     
@@ -277,11 +270,11 @@ class EyeTrackingFeatureExtraction {
         largeIntrusiveSaccades++;
         inSaccade = true;
       } else if (movement < 0.02) {
-        inSaccade = false; // Reset when movement is small
+        inSaccade = false;
       }
     }
 
-    // Count square wave jerks, pairs of small saccades in opposite directions
+    // Count square wave jerks (pairs of small saccades in opposite directions)
     int squareWaveJerks = 0;
     
     for (int i = 3; i < allFrames.length; i++) {
@@ -294,17 +287,14 @@ class EyeTrackingFeatureExtraction {
         allFrames[i - 1].eyePosition,
       );
       
-      // Both movements should be small saccades
       if (move1 > 0.015 && move1 < 0.05 && move2 > 0.015 && move2 < 0.05) {
         final timeDiff = (allFrames[i].timestamp - allFrames[i - 2].timestamp) * 1000;
         
-        // Check if they're in roughly opposite directions
         final dx1 = allFrames[i - 2].eyePosition.dx - allFrames[i - 3].eyePosition.dx;
         final dx2 = allFrames[i].eyePosition.dx - allFrames[i - 1].eyePosition.dx;
         final dy1 = allFrames[i - 2].eyePosition.dy - allFrames[i - 3].eyePosition.dy;
         final dy2 = allFrames[i].eyePosition.dy - allFrames[i - 1].eyePosition.dy;
         
-        // Dot product < 0 means opposite directions
         final dotProduct = dx1 * dx2 + dy1 * dy2;
         
         if (timeDiff > 100 && timeDiff < 500 && dotProduct < 0) {
@@ -316,11 +306,10 @@ class EyeTrackingFeatureExtraction {
     // Calculate max fixation duration
     double maxFixationDuration = 0.0;
     double currentFixationDuration = 0.0;
-    const fixThreshold = fixationThreshold;
 
     for (int i = 1; i < allFrames.length; i++) {
-      if (allFrames[i].distance < fixThreshold) {
-        final duration = (allFrames[i].timestamp - allFrames[i - 1].timestamp) * 1000; // ms
+      if (allFrames[i].distance < fixationThreshold) {
+        final duration = (allFrames[i].timestamp - allFrames[i - 1].timestamp) * 1000;
         currentFixationDuration += duration;
       } else {
         if (currentFixationDuration > maxFixationDuration) {
@@ -334,14 +323,15 @@ class EyeTrackingFeatureExtraction {
       maxFixationDuration = currentFixationDuration;
     }
 
-    // Convert to seconds
-    maxFixationDuration = maxFixationDuration / 1000.0;
+    maxFixationDuration = maxFixationDuration / 1000.0; // Convert to seconds
 
     // Calculate mean and std of distances
     final distances = allFrames.map((f) => f.distance).toList();
     final meanDistance = distances.reduce((a, b) => a + b) / distances.length;
     final variance = distances.map((d) => pow(d - meanDistance, 2)).reduce((a, b) => a + b) / distances.length;
     final stdDistance = sqrt(variance);
+
+    AppLogger.logger.info('Fixation: $largeIntrusiveSaccades large saccades, $squareWaveJerks SWJ, max duration: ${maxFixationDuration.toStringAsFixed(2)}s');
 
     return {
       'largeIntrusiveSaccades': largeIntrusiveSaccades,
@@ -362,82 +352,147 @@ class EyeTrackingFeatureExtraction {
       };
     }
 
-    int successfulTrials = 0;
-    double totalLatency = 0.0;
-    double totalSaccades = 0.0;
+    AppLogger.logger.info('=== PROSACCADE ANALYSIS (${trials.length} trials) ===');
 
-    const double targetThreshold = 0.15;
+    int successfulTrials = 0;
+    List<double> validLatencies = [];
+    List<int> saccadeCounts = [];
+    const double targetThreshold = 0.25; // changed from 0.15 to 0.25
+    const int minFramesForProsaccade = 15; // changed from 30
+    const int minFramesAfterJump = 3;
 
     for (final trial in trials) {
-      if (trial.frames.isEmpty) continue;
+      if (trial.frames.length < minFramesForProsaccade) {
+        AppLogger.logger.info('Trial ${trial.trialNumber}: SKIPPED (only ${trial.frames.length} frames)');
+        continue;
+      }
 
-      // Group frames into continuous segments based on target position
-      List<List<EyeTrackingFrame>> segments = [];
-      List<EyeTrackingFrame> currentSegment = [trial.frames[0]];
-      Offset lastTargetPos = trial.frames[0].targetPosition;
+      // DEBUG: Log first few frames to see target positions
+      AppLogger.logger.info('=== Trial ${trial.trialNumber} DEBUG ===');
+      for (int i = 0; i < min(5, trial.frames.length); i++) {
+        final f = trial.frames[i];
+        AppLogger.logger.info('  Frame $i: target=(${f.targetPosition.dx.toStringAsFixed(3)}, ${f.targetPosition.dy.toStringAsFixed(3)}), eye=(${f.eyePosition.dx.toStringAsFixed(3)}, ${f.eyePosition.dy.toStringAsFixed(3)}), dist=${f.distance.toStringAsFixed(3)}');
+      }
 
+        // DEBUG: Check for ANY movement in target position
+      double maxTargetMovement = 0.0;
       for (int i = 1; i < trial.frames.length; i++) {
-        final currentTargetPos = trial.frames[i].targetPosition;
-        final targetMoved = _calculateDistance(currentTargetPos, lastTargetPos) > 0.05;
-        
-        if (targetMoved) {
-          segments.add(currentSegment);
-          currentSegment = [trial.frames[i]];
-          lastTargetPos = currentTargetPos;
-        } else {
-          currentSegment.add(trial.frames[i]);
+        final movement = _calculateDistance(
+          trial.frames[i].targetPosition,
+          trial.frames[i - 1].targetPosition,
+        );
+        if (movement > maxTargetMovement) {
+          maxTargetMovement = movement;
+          AppLogger.logger.info('  Max target movement so far: ${maxTargetMovement.toStringAsFixed(4)} at frame $i');
+          AppLogger.logger.info('    From (${trial.frames[i-1].targetPosition.dx.toStringAsFixed(3)}, ${trial.frames[i-1].targetPosition.dy.toStringAsFixed(3)}) to (${trial.frames[i].targetPosition.dx.toStringAsFixed(3)}, ${trial.frames[i].targetPosition.dy.toStringAsFixed(3)})');
         }
       }
-      if (currentSegment.isNotEmpty) segments.add(currentSegment);
+      AppLogger.logger.info('  Trial ${trial.trialNumber}: Max target movement across all frames = ${maxTargetMovement.toStringAsFixed(4)}');
 
-      // Find the peripheral target segment
-      List<EyeTrackingFrame>? peripheralSegment;
-      for (var segment in segments) {
-        if (segment.isEmpty) continue;
-        final targetPos = segment.first.targetPosition;
-        final distFromCenter = _calculateDistance(targetPos, const Offset(0.5, 0.5));
-        if (distFromCenter > 0.1) {
-          peripheralSegment = segment;
+      // Detect target jumps by finding large position changes
+      List<int> targetJumpIndices = [0]; // Start is always a position
+      double largestJump = 0.0;
+      int largestJumpIdx = -1;
+      for (int i = 1; i < trial.frames.length; i++) {
+        final targetMovement = _calculateDistance(
+          trial.frames[i].targetPosition,
+          trial.frames[i - 1].targetPosition,
+        );
+        if (targetMovement > largestJump) {
+          largestJump = targetMovement;
+          largestJumpIdx = i;
+        }
+        if (targetMovement > 0.1) { // Target jumped
+          targetJumpIndices.add(i);
+        }
+      }
+
+      // Ensure every trial has a proper target jump (displacement >= 0.1)
+      if (largestJump < 0.1 || targetJumpIndices.length < 2) {
+        AppLogger.logger.info('Trial ${trial.trialNumber}: No proper target jump detected (largest jump=${largestJump.toStringAsFixed(3)})');
+        continue;
+      }
+
+      // Analyze the segment after the first target jump (central → peripheral)
+      final jumpIdx = targetJumpIndices[1];
+      final peripheralTarget = trial.frames[jumpIdx].targetPosition;
+
+      // Find frames after the jump
+      final postJumpFrames = trial.frames.sublist(jumpIdx);
+
+      if (postJumpFrames.length < minFramesAfterJump) {
+        AppLogger.logger.info('Trial ${trial.trialNumber}: Not enough frames after jump (${postJumpFrames.length})');
+        continue;
+      }
+
+      // Find when gaze first enters target ROI
+      int? firstReachIdx;
+      for (int i = 1; i < postJumpFrames.length; i++) {
+        final dist = _calculateDistance(postJumpFrames[i].eyePosition, peripheralTarget);
+        if (dist < targetThreshold) {
+          firstReachIdx = i;
           break;
         }
       }
 
-      if (peripheralSegment == null || peripheralSegment.isEmpty) continue;
-
-      // Check if gaze reached target
-      final reachedFrames = peripheralSegment.where((f) => f.distance < targetThreshold).toList();
-      
-      if (reachedFrames.isNotEmpty) {
-        successfulTrials++;
-
-        // Calculate latency: time from first frame of peripheral segment to first reach
-        final targetOnset = peripheralSegment.first.timestamp;
-        final firstReach = reachedFrames.first.timestamp;
-        final latency = (firstReach - targetOnset) * 1000; // ms
-
-        // Only count realistic latencies
-        if (latency >= 150 && latency < 800) {
-          totalLatency += latency;
+      if (firstReachIdx == null) {
+        AppLogger.logger.info('Trial ${trial.trialNumber}: Target never reached');
+        final firstFrameDist = _calculateDistance(postJumpFrames[0].eyePosition, peripheralTarget);
+        if (firstFrameDist < targetThreshold) {
+          AppLogger.logger.info('Trial ${trial.trialNumber}: Eye already at target (anticipatory, dist=${firstFrameDist.toStringAsFixed(3)})');
+        } else {
+          AppLogger.logger.info('Trial ${trial.trialNumber}: Target never reached (min dist=${firstFrameDist.toStringAsFixed(3)})');
         }
-
-        // Count saccades in peripheral segment
-        int saccades = 0;
-        for (int i = 1; i < peripheralSegment.length; i++) {
-          final movement = _calculateDistance(
-            peripheralSegment[i].eyePosition,
-            peripheralSegment[i - 1].eyePosition,
-          );
-          if (movement > 0.03) {
-            saccades++;
-          }
-        }
-        totalSaccades += saccades;
+        continue;
       }
+
+      // Calculate latency
+      final latencyMs = (postJumpFrames[firstReachIdx].timestamp - postJumpFrames[0].timestamp) * 1000;
+
+      // DEBUG: Log latency calculation
+      AppLogger.logger.info('Trial ${trial.trialNumber} latency calc: firstReachIdx=$firstReachIdx, timestamps: ${postJumpFrames[0].timestamp.toStringAsFixed(3)}→${postJumpFrames[firstReachIdx].timestamp.toStringAsFixed(3)}, latency=${latencyMs.toStringAsFixed(0)}ms');
+
+      // changed to accept latencies from 50ms to 1000ms (was 150-800ms)
+      if (latencyMs < 50.0 || latencyMs > 1000.0) {
+        AppLogger.logger.info('Trial ${trial.trialNumber}: Latency ${latencyMs.toStringAsFixed(0)}ms out of range (100-1000ms)');
+        continue;
+      }
+
+      // Count saccades (rapid movements) in the post-jump period
+      int saccadeCount = 0;
+      bool inSaccade = false;
+      
+      for (int i = 1; i < postJumpFrames.length && i <= firstReachIdx + 5; i++) {
+        final movement = _calculateDistance(
+          postJumpFrames[i].eyePosition,
+          postJumpFrames[i - 1].eyePosition,
+        );
+        
+        if (movement > saccadeVelocityThreshold && !inSaccade) {
+          saccadeCount++;
+          inSaccade = true;
+        } else if (movement < 0.01) {
+          inSaccade = false;
+        }
+      }
+
+      successfulTrials++;
+      validLatencies.add(latencyMs);
+      saccadeCounts.add(saccadeCount);
+
+      AppLogger.logger.info('Trial ${trial.trialNumber}: ✓ latency=${latencyMs.toStringAsFixed(0)}ms, saccades=$saccadeCount');
     }
 
     final accuracy = trials.isNotEmpty ? successfulTrials / trials.length : 0.0;
-    final meanLatency = successfulTrials > 0 ? totalLatency / successfulTrials : 0.0;
-    final meanSaccades = successfulTrials > 0 ? totalSaccades / successfulTrials : 0.0;
+    final meanLatency = validLatencies.isNotEmpty 
+        ? validLatencies.reduce((a, b) => a + b) / validLatencies.length 
+        : 0.0;
+    final meanSaccades = saccadeCounts.isNotEmpty
+        ? saccadeCounts.reduce((a, b) => a + b) / saccadeCounts.length
+        : 0.0;
+
+    AppLogger.logger.info('PROSACCADE SUMMARY: $successfulTrials/${trials.length} valid (${(accuracy * 100).toStringAsFixed(1)}%)');
+    AppLogger.logger.info('Mean latency: ${meanLatency.toStringAsFixed(1)}ms, Mean saccades: ${meanSaccades.toStringAsFixed(1)}');
 
     return {
       'accuracy': accuracy,
@@ -457,144 +512,105 @@ class EyeTrackingFeatureExtraction {
       };
     }
 
-    double totalGain = 0.0;
-    int gainSamples = 0;
-    int pursuingCount = 0;
+    AppLogger.logger.info('=== SMOOTH PURSUIT ANALYSIS (${trials.length} trials) ===');
+
+    List<double> gainSamples = [];
+    int pursuingFrames = 0;
+    int totalFrames = 0;
     int catchUpSaccades = 0;
-    int totalSamples = 0;
 
-    AppLogger.logger.info('=== PURSUIT METRICS WITH DEBUG ===');
-    
     for (final trial in trials) {
-      if (trial.frames.length < minFramesForAnalysis) continue;
-
-      // DEBUG: Check target movement for first trial
-      if (trial.trialNumber == 1) {
-        AppLogger.logger.info('Trial 1 analysis:');
-        final totalTime = trial.frames.last.timestamp - trial.frames.first.timestamp;
-        double totalTargetMovement = 0;
-        double totalEyeMovement = 0;
-        
-        for (int i = 1; i < trial.frames.length; i++) {
-          totalTargetMovement += _calculateDistance(
-            trial.frames[i].targetPosition,
-            trial.frames[i - 1].targetPosition,
-          );
-          totalEyeMovement += _calculateDistance(
-            trial.frames[i].eyePosition,
-            trial.frames[i - 1].eyePosition,
-          );
-        }
-        
-        AppLogger.logger.info('  Total time: ${totalTime.toStringAsFixed(2)}s');
-        AppLogger.logger.info('  Target moved: ${totalTargetMovement.toStringAsFixed(3)} units');
-        AppLogger.logger.info('  Eye moved: ${totalEyeMovement.toStringAsFixed(3)} units');
-        AppLogger.logger.info('  Avg target velocity: ${(totalTargetMovement / totalTime).toStringAsFixed(4)} units/s');
-        AppLogger.logger.info('  Avg eye velocity: ${(totalEyeMovement / totalTime).toStringAsFixed(4)} units/s');
-        AppLogger.logger.info('  Raw gain estimate: ${(totalEyeMovement / totalTargetMovement).toStringAsFixed(3)}');
-        
-        // Check frame timing
-        List<double> timeDiffs = [];
-        for (int i = 1; i < min(20, trial.frames.length); i++) {
-          timeDiffs.add(trial.frames[i].timestamp - trial.frames[i - 1].timestamp);
-        }
-        final avgTime = timeDiffs.reduce((a, b) => a + b) / timeDiffs.length;
-        final maxTime = timeDiffs.reduce(max);
-        final minTime = timeDiffs.reduce(min);
-        debugPrint('  Frame timing: avg=${(avgTime * 1000).toStringAsFixed(1)}ms, min=${(minTime * 1000).toStringAsFixed(1)}ms, max=${(maxTime * 1000).toStringAsFixed(1)}ms');
-        
-        // Sample some individual frames
-        debugPrint('  First 5 frames:');
-        for (int i = 0; i < min(5, trial.frames.length); i++) {
-          final f = trial.frames[i];
-          debugPrint('    [$i] t=${f.timestamp.toStringAsFixed(2)}s, target=(${f.targetPosition.dx.toStringAsFixed(3)}, ${f.targetPosition.dy.toStringAsFixed(3)}), eye=(${f.eyePosition.dx.toStringAsFixed(3)}, ${f.eyePosition.dy.toStringAsFixed(3)}), dist=${f.distance.toStringAsFixed(3)}');
-        }
+      if (trial.frames.length < minFramesForAnalysis) {
+        AppLogger.logger.info('Trial ${trial.trialNumber}: SKIPPED (only ${trial.frames.length} frames)');
+        continue;
       }
 
-      int trialGainSamples = 0;
-      int trialPursuingSamples = 0;
+      int trialPursuingFrames = 0;
+      int trialTotalFrames = 0;
       List<double> trialGains = [];
-      
+
+      // Analyze frame-by-frame pursuit
       for (int i = 2; i < trial.frames.length; i++) {
-        final timeDiff = trial.frames[i].timestamp - trial.frames[i - 1].timestamp;
-        if (timeDiff <= 0 || timeDiff > 0.1) continue;
+        final dt = trial.frames[i].timestamp - trial.frames[i - 1].timestamp;
+        if (dt <= 0 || dt > 0.1) continue; // Skip invalid frames
 
-        totalSamples++;
+        trialTotalFrames++;
+        totalFrames++;
 
-        // Calculate target velocity from frame-to-frame movement
-        final targetMovement1 = _calculateDistance(
-          trial.frames[i].targetPosition,
-          trial.frames[i - 1].targetPosition,
-        );
-        final targetMovement2 = _calculateDistance(
-          trial.frames[i - 1].targetPosition,
-          trial.frames[i - 2].targetPosition,
-        );
-        final targetVelocity = (targetMovement1 + targetMovement2) / (2 * timeDiff);
+        // Calculate velocities using 2-frame averaging for stability
+        final targetDx1 = trial.frames[i].targetPosition.dx - trial.frames[i - 1].targetPosition.dx;
+        final targetDy1 = trial.frames[i].targetPosition.dy - trial.frames[i - 1].targetPosition.dy;
+        final targetDx2 = trial.frames[i - 1].targetPosition.dx - trial.frames[i - 2].targetPosition.dx;
+        final targetDy2 = trial.frames[i - 1].targetPosition.dy - trial.frames[i - 2].targetPosition.dy;
+        
+        final targetVelX = (targetDx1 + targetDx2) / (2 * dt);
+        final targetVelY = (targetDy1 + targetDy2) / (2 * dt);
+        final targetSpeed = sqrt(targetVelX * targetVelX + targetVelY * targetVelY);
 
-        // Calculate eye velocity
-        final eyeMovement1 = _calculateDistance(
-          trial.frames[i].eyePosition,
-          trial.frames[i - 1].eyePosition,
-        );
-        final eyeMovement2 = _calculateDistance(
-          trial.frames[i - 1].eyePosition,
-          trial.frames[i - 2].eyePosition,
-        );
-        final eyeVelocity = (eyeMovement1 + eyeMovement2) / (2 * timeDiff);
+        final eyeDx1 = trial.frames[i].eyePosition.dx - trial.frames[i - 1].eyePosition.dx;
+        final eyeDy1 = trial.frames[i].eyePosition.dy - trial.frames[i - 1].eyePosition.dy;
+        final eyeDx2 = trial.frames[i - 1].eyePosition.dx - trial.frames[i - 2].eyePosition.dx;
+        final eyeDy2 = trial.frames[i - 1].eyePosition.dy - trial.frames[i - 2].eyePosition.dy;
+        
+        final eyeVelX = (eyeDx1 + eyeDx2) / (2 * dt);
+        final eyeVelY = (eyeDy1 + eyeDy2) / (2 * dt);
+        final eyeSpeed = sqrt(eyeVelX * eyeVelX + eyeVelY * eyeVelY);
 
-        // Debug first trial samples
-        if (trial.trialNumber == 1 && i >= 10 && i < 15) {
-          debugPrint('  Sample $i: eyeVel=${eyeVelocity.toStringAsFixed(4)}, targetVel=${targetVelocity.toStringAsFixed(4)}, gain=${(eyeVelocity / targetVelocity).toStringAsFixed(3)}, dist=${trial.frames[i].distance.toStringAsFixed(3)}');
-        }
-
-        if (targetVelocity > 0.01) {
-          final gain = eyeVelocity / targetVelocity;
-
-          if (gain > 0.05 && gain < 3.0) {
-            totalGain += gain;
-            gainSamples++;
-            trialGainSamples++;
+        // Calculate pursuit gain when target is moving
+        if (targetSpeed > pursuitVelocityThreshold) {
+          final gain = eyeSpeed / targetSpeed;
+          
+          // Only accept physiologically plausible gains
+          if (gain > 0.1 && gain < 2.0) {
+            gainSamples.add(gain);
             trialGains.add(gain);
           }
 
-          // More lenient: 10% of target velocity and distance < 0.3
-          if (eyeVelocity > 0.1 * targetVelocity && trial.frames[i].distance < 0.3) {
-            pursuingCount++;
-            trialPursuingSamples++;
+          // Check if actively pursuing: eye moving in same direction as target AND close to target
+          final dotProduct = eyeVelX * targetVelX + eyeVelY * targetVelY;
+          final directionMatch = dotProduct > 0; // Moving in same direction
+          final closeToTarget = trial.frames[i].distance < 0.30;
+          final eyeMoving = eyeSpeed > (pursuitVelocityThreshold * 1.5);
+
+          if (directionMatch && closeToTarget && eyeMoving) {
+            pursuingFrames++;
+            trialPursuingFrames++;
           }
         }
 
-        // Detect catch-up saccades
-        final eyeMovement = _calculateDistance(
+        // Detect catch-up saccades: fast movement while far from target
+        final rapidMovement = _calculateDistance(
           trial.frames[i].eyePosition,
           trial.frames[i - 1].eyePosition,
         );
-        if (eyeMovement > 0.03 && trial.frames[i].distance > 0.1) {
+        
+        if (rapidMovement > 0.04 && trial.frames[i].distance > 0.15) {
           catchUpSaccades++;
         }
       }
 
-      if (trial.trialNumber == 1 && trialGains.isNotEmpty) {
-        final avgGain = trialGains.reduce((a, b) => a + b) / trialGains.length;
-        final sortedGains = List<double>.from(trialGains)..sort();
-        final medianGain = sortedGains[sortedGains.length ~/ 2];
-        debugPrint('  Trial 1 gain stats: avg=${avgGain.toStringAsFixed(3)}, median=${medianGain.toStringAsFixed(3)}, samples=$trialGainSamples');
-        debugPrint('  Trial 1 pursuing: $trialPursuingSamples/${trial.frames.length - 2} (${(trialPursuingSamples / (trial.frames.length - 2) * 100).toStringAsFixed(1)}%)');
+      if (trialGains.isNotEmpty && trialTotalFrames > 0) {
+        final trialMeanGain = trialGains.reduce((a, b) => a + b) / trialGains.length;
+        final trialPursuitProp = trialPursuingFrames / trialTotalFrames;
+        AppLogger.logger.info('Trial ${trial.trialNumber}: gain=${trialMeanGain.toStringAsFixed(2)}, pursuing=${(trialPursuitProp * 100).toStringAsFixed(1)}%');
       }
     }
 
-    final pursuitGain = gainSamples > 0 ? totalGain / gainSamples : 0.0;
-    final proportionPursuing = totalSamples > 0 ? pursuingCount / totalSamples : 0.0;
+    final pursuitGain = gainSamples.isNotEmpty 
+        ? gainSamples.reduce((a, b) => a + b) / gainSamples.length 
+        : 0.0;
+    final proportionPursuing = totalFrames > 0 
+        ? pursuingFrames / totalFrames 
+        : 0.0;
 
-    debugPrint('FINAL: gain=$pursuitGain, pursuing=$proportionPursuing (${(proportionPursuing * 100).toStringAsFixed(1)}%)');
-    debugPrint('Total samples: $totalSamples, gain samples: $gainSamples, pursuing samples: $pursuingCount');
+    AppLogger.logger.info('PURSUIT SUMMARY: gain=${pursuitGain.toStringAsFixed(2)}, pursuing=${(proportionPursuing * 100).toStringAsFixed(1)}%, catch-up=$catchUpSaccades');
+    AppLogger.logger.info('Total frames analyzed: $totalFrames, gain samples: ${gainSamples.length}');
 
     return {
       'pursuitGain': pursuitGain,
       'proportionPursuing': proportionPursuing,
       'catchUpSaccades': catchUpSaccades,
-      'totalDataPoints': totalSamples,
+      'totalDataPoints': totalFrames,
     };
   }
 
@@ -606,7 +622,8 @@ class EyeTrackingFeatureExtraction {
 
   static double _calculateOverallAccuracy(double fixationDistance, double prosaccadeAccuracy, double pursuitGain) {
     final fixationScore = max(0.0, 1.0 - fixationDistance);
-    return (fixationScore + prosaccadeAccuracy + pursuitGain) / 3.0;
+    final pursuitScore = min(pursuitGain, 1.0); // Cap at 1.0
+    return (fixationScore + prosaccadeAccuracy + pursuitScore) / 3.0;
   }
 
   static EyeTrackingFeatures getEmptyFeatures() {

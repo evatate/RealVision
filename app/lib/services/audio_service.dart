@@ -134,6 +134,7 @@ class AudioService {
     if (_isRecording && _audioRecorder != null) {
       _audioRecorder!.stopRecorder();
     }
+    // Only closeRecorder ONCE at the end of the service lifecycle
     _audioRecorder?.closeRecorder();
     _flutterTts.stop();
   }
