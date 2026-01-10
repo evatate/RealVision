@@ -191,7 +191,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
       return false;
     }
 
-    // pursuit: skip mean distance check (target is moving!)
+    // pursuit: skip mean distance check
     if (_currentTask == EyeTrackingTask.pursuit) {
       return true;
     }
@@ -693,12 +693,12 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
             AppLogger.logger.info('All prosaccade trials completed');
             _stopEyeTracking();
             _eyeTrackingService.clearData();
+            Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
             _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
             return;
           }
           pos = _getProsaccadePosition(_prosaccadeSequence[_prosaccadeIndex]);
         }
-        if (pos == null) return;
 
         if (!mounted) return;
         setState(() {
@@ -759,6 +759,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
                 AppLogger.logger.info('Prosaccade test block complete (hard stop after increment).');
                 _stopEyeTracking();
                 _eyeTrackingService.clearData();
+                Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
                 _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
                 return;
               }

@@ -26,7 +26,7 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _initializeApp() async {
-    // Record start time to ensure minimum splash duration (prevents flicker)
+    // Record start time to ensure minimum splash duration
     final startTime = DateTime.now();
     const minSplashDuration = Duration(seconds: 2);
     
@@ -77,7 +77,7 @@ class _SplashScreenState extends State<SplashScreen> {
       _instructionsSpoken = true;
       await audioService.speak(
         'Complete all four tests. '
-        'Complete the eye tracking tests in order'
+        'Complete the eye tracking tests in order.'
         'Find a quiet, well lit space. '
         'Follow the audio instructions. '
         'Press Start Assessment to begin.'

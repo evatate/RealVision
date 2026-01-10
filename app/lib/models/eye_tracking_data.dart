@@ -392,7 +392,6 @@ class EyeTrackingFeatureExtraction {
       // Detect target jumps by finding large position changes
       List<int> targetJumpIndices = [0]; // Start is always a position
       double largestJump = 0.0;
-      int largestJumpIdx = -1;
       for (int i = 1; i < trial.frames.length; i++) {
         final targetMovement = _calculateDistance(
           trial.frames[i].targetPosition,
@@ -400,7 +399,6 @@ class EyeTrackingFeatureExtraction {
         );
         if (targetMovement > largestJump) {
           largestJump = targetMovement;
-          largestJumpIdx = i;
         }
         if (targetMovement > 0.1) { // Target jumped
           targetJumpIndices.add(i);

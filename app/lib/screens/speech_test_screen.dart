@@ -5,10 +5,13 @@ import '../models/test_progress.dart';
 import '../services/audio_service.dart';
 import '../services/aws_storage_service.dart';
 import '../services/service_locator.dart';
+import '../services/cha_transcript_builder.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../utils/logger.dart';
 import '../widgets/breadcrumb.dart';
+import 'dart:io';
+
 class SpeechTestScreen extends StatefulWidget {
   const SpeechTestScreen({super.key});
 
@@ -19,23 +22,18 @@ class SpeechTestScreen extends StatefulWidget {
 class _SpeechTestScreenState extends State<SpeechTestScreen> {
   final AudioService _audioService = AudioService();
   final AWSStorageService _awsStorage = getIt<AWSStorageService>();
-  bool _isRecording = false;
+  bool _isListening = false;
   String _transcript = '';
   bool _initialized = false;
   bool _hasSpoken = false;
-  String? _recordingPath;
-  String? _transcribeJobName;
-  Timer? _transcriptionPollTimer;
-  bool _isTranscribing = false;
-  String _transcriptionStatus = '';
   
-  // New timing and validation variables
+  // Timing and validation variables
   DateTime? _testStartTime;
   bool _canFinish = false;
-  Timer? _silenceTimer;
   Timer? _minimumTimeTimer;
+  Timer? _elapsedTimeTimer;
+  int _elapsedSeconds = 0;
   static const Duration _minimumTestDuration = Duration(minutes: 1);
-  static const int _minimumWordCount = 100;
 
   @override
   void initState() {
@@ -52,24 +50,23 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       
       if (mounted && !_hasSpoken) {
         await _audioService.speak(
-          'Please describe everything and explain what is happening, what people are doing, and how the scene fits together. Continue speaking until I tell you to stop.',
+          'Please describe everything you see in the picture and explain what is happening, what people are doing, and how the scene fits together. Continue speaking until I tell you to stop.',
         );
         _hasSpoken = true;
       }
     } catch (e) {
-      AppLogger.logger.severe('Audio initialization error: $e');
+      AppLogger.logger.info('Audio initialization error: $e');
       setState(() => _initialized = true);
     }
   }
 
   Future<void> _startTest() async {
     setState(() {
-      _isRecording = true;
+      _isListening = true;
       _transcript = '';
-      _transcriptionStatus = '';
       _testStartTime = DateTime.now();
       _canFinish = false;
-      _transcribeJobName = null;
+      _elapsedSeconds = 0;
     });
     
     // Start minimum duration timer
@@ -79,18 +76,50 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       }
     });
     
-    try {
-      _recordingPath = await _audioService.startRecording();
-      if (_recordingPath == null) {
-        throw Exception('Failed to start recording');
+    // Start elapsed time counter
+    _elapsedTimeTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted && _isListening) {
+        setState(() {
+          _elapsedSeconds = timer.tick;
+        });
       }
-      
-      AppLogger.logger.info('Recording started: $_recordingPath');
-      
+    });
+
+    // WAV recording start
+    _audioService.resetSegments();
+    String? wavPath;
+    try {
+      wavPath = await _audioService.startRecording();
+      AppLogger.logger.info('WAV recording started. File path: $wavPath');
     } catch (e) {
-      AppLogger.logger.severe('Error starting recording: $e');
+      AppLogger.logger.severe('Error starting WAV recording: $e');
+    }
+
+    try {
+      await _audioService.startListening(
+        onResult: (text) {
+          if (mounted) {
+            setState(() => _transcript = text);
+          }
+        },
+        onError: (error) {
+          AppLogger.logger.severe('Speech recognition error: $error');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Microphone error. Check permissions.'),
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        },
+      );
+    } catch (e) {
+      AppLogger.logger.severe('Error starting speech test: $e');
       if (mounted) {
-        setState(() => _isRecording = false);
+        setState(() => _isListening = false);
+        _elapsedTimeTimer?.cancel();
+        _minimumTimeTimer?.cancel();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to start recording: $e'),
@@ -102,49 +131,16 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
   }
 
   Future<void> _stopTest() async {
-    // Cancel timers
-    _silenceTimer?.cancel();
-    _minimumTimeTimer?.cancel();
-    
-    setState(() {
-      _isTranscribing = true;
-      _transcriptionStatus = 'Stopping recording...';
-    });
-    
-    final recordingPath = await _audioService.stopRecording();
-    
-    if (mounted) {
-      setState(() {
-        _isRecording = false;
-        _transcriptionStatus = 'Recording stopped. Processing...';
-      });
-    }
-    
-    if (recordingPath == null) {
-      if (mounted) {
-        setState(() => _isTranscribing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Recording failed. Please try again.'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-      return;
-    }
-    
-    // Check minimum duration
+    // Check minimum duration before proceeding
     final testDuration = _testStartTime != null 
         ? DateTime.now().difference(_testStartTime!) 
         : Duration.zero;
     
     if (testDuration < _minimumTestDuration) {
       if (mounted) {
-        setState(() => _isTranscribing = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Test must run for at least ${_minimumTestDuration.inMinutes} minute(s). Current duration: ${testDuration.inSeconds} seconds.'),
+            content: Text('Please continue speaking. Test must run for at least ${_minimumTestDuration.inMinutes} minute(s). Current duration: ${testDuration.inSeconds} seconds.'),
             backgroundColor: Colors.orange,
             duration: const Duration(seconds: 5),
           ),
@@ -152,118 +148,31 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       }
       return;
     }
-    
+
+    // Cancel timers
+    _elapsedTimeTimer?.cancel();
+    _minimumTimeTimer?.cancel();
+
+    // WAV recording stop
+    String? wavPath;
     try {
-
-      // Upload to AWS S3
-      setState(() => _transcriptionStatus = 'Uploading audio to secure storage...');
-      final s3Key = await _awsStorage.uploadAudioFile(recordingPath);
-      
-      if (s3Key == null) {
-        // AWS services not available - simulate transcription for testing
-        AppLogger.logger.warning('AWS S3 upload failed - identity pool not configured');
-        setState(() => _transcriptionStatus = 'AWS services not available. Simulating transcription...');
-        
-        // Simulate transcription delay
-        await Future.delayed(const Duration(seconds: 3));
-        
-        // Create mock transcription result
-        final mockAnalysis = _createMockTranscriptionResult(testDuration);
-        _handleTranscriptionComplete(mockAnalysis);
-        return;
-      }
-      
-      // Start AWS Medical Transcribe job
-      setState(() => _transcriptionStatus = 'Starting medical transcription...');
-      final transcribeResult = await _awsStorage.transcribeAudio(s3Key);
-      
-      if (transcribeResult == null) {
-        throw Exception('Failed to start transcription');
-      }
-      
-      _transcribeJobName = transcribeResult['jobName'];
-      
-      // Start polling for results
-      setState(() => _transcriptionStatus = 'Transcribing speech...');
-      _startTranscriptionPolling();
-      
+      wavPath = await _audioService.stopRecording();
+      AppLogger.logger.info('WAV recording stopped. File path: $wavPath');
     } catch (e) {
-      AppLogger.logger.severe('Transcription error: $e');
-      if (mounted) {
-        setState(() => _isTranscribing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Transcription failed: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
+      AppLogger.logger.severe('Error stopping WAV recording: $e');
     }
-  }
 
-  void _startTranscriptionPolling() {
-    _transcriptionPollTimer?.cancel();
-    _transcriptionPollTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
-      if (!mounted || _transcribeJobName == null) {
-        timer.cancel();
-        return;
-      }
-      
-      try {
-        final result = await _awsStorage.getTranscriptionResults(_transcribeJobName!);
-        
-        if (result != null) {
-          // Transcription complete
-          timer.cancel();
-          
-          setState(() {
-            _transcript = result.transcript;
-            _isTranscribing = false;
-            _transcriptionStatus = 'Transcription complete';
-          });
-          
-          // Validate results
-          await _validateAndComplete(result);
-          
-        } else {
-          // Still processing
-          setState(() => _transcriptionStatus = 'Transcribing speech... (${timer.tick * 5}s)');
-        }
-        
-      } catch (e) {
-        AppLogger.logger.severe('Polling error: $e');
-        timer.cancel();
-        if (mounted) {
-          setState(() => _isTranscribing = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Transcription polling failed: $e'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-        }
-      }
-    });
-  }
+    await _audioService.stopListening();
 
-  Future<void> _validateAndComplete(SpeechAnalysis analysis) async {
-    // Check word count
-    if (analysis.wordCount < _minimumWordCount) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Please speak more. Minimum $_minimumWordCount words required. Current count: ${analysis.wordCount} words.'),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-      return;
+    if (mounted) {
+      setState(() => _isListening = false);
     }
-    
-    if (analysis.transcript.trim().isEmpty || analysis.transcript.trim().length < 10) {
+
+    final finalTranscript = _transcript.isNotEmpty
+        ? _transcript
+        : _audioService.getAccumulatedTranscript();
+
+    if (finalTranscript.trim().isEmpty || finalTranscript.trim().length < 10) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -275,15 +184,54 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       }
       return;
     }
-    
+
+    // WAV upload and CHA transcript
+    if (wavPath != null && File(wavPath).existsSync()) {
+      try {
+        AppLogger.logger.info('Uploading WAV file to S3: $wavPath');
+        final s3Key = await _awsStorage.uploadAudioFile(wavPath);
+        if (s3Key != null) {
+          AppLogger.logger.info('WAV uploaded to S3: $s3Key');
+          final segments = _audioService.getSegments();
+          final cha = ChaTranscriptBuilder.build(
+            segments: segments,
+            totalDuration: const Duration(seconds: 120),
+          );
+          final chaFile = File('$wavPath.cha');
+          try {
+            await chaFile.writeAsString(cha);
+            AppLogger.logger.info('CHA file created: ${chaFile.path}');
+            try {
+              await _awsStorage.uploadTextFile(
+                chaFile.path,
+                s3Key.replaceAll('.wav', '.cha'),
+              );
+              AppLogger.logger.info('CHA uploaded to S3: ${s3Key.replaceAll('.wav', '.cha')}');
+            } catch (e) {
+              AppLogger.logger.severe('CHA upload to S3 failed: $e');
+            }
+          } catch (e) {
+            AppLogger.logger.severe('Failed to write CHA file: $e');
+          }
+        } else {
+          AppLogger.logger.severe('S3 upload failed for $wavPath');
+        }
+      } catch (e) {
+        AppLogger.logger.severe('WAV upload to S3 failed: $e');
+      }
+    } else {
+      AppLogger.logger.severe('WAV file does not exist or path is null: $wavPath');
+    }
+
     if (mounted) {
       Provider.of<TestProgress>(context, listen: false).markSpeechCompleted();
     }
-    
+
     await _audioService.speak('Thank you. Speech test complete.');
-    
-    AppLogger.logger.info('Speech analysis: $analysis');
-    
+
+    AppLogger.logger.info('Speech transcript: $finalTranscript');
+    AppLogger.logger.info('Transcript length: ${finalTranscript.split(' ').length} words');
+
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) Navigator.pop(context);
     });
@@ -291,12 +239,9 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
 
   @override
   void dispose() {
-    _silenceTimer?.cancel();
+    _elapsedTimeTimer?.cancel();
     _minimumTimeTimer?.cancel();
-    _transcriptionPollTimer?.cancel();
-    if (_isRecording) {
-      _audioService.stopRecording();
-    }
+    _audioService.stopListening();
     super.dispose();
     // Dispose audio service after a delay to let final TTS complete
     Future.delayed(const Duration(seconds: 3), () {
@@ -355,7 +300,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                     ),
                     SizedBox(height: 20),
                     
-                    if (!_isRecording && !_isTranscribing)
+                    if (!_isListening)
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -371,42 +316,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                             padding: EdgeInsets.all(20),
                           ),
                         ),
-                      )
-                    else if (_isTranscribing)
-                      Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.blue[50],
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.blue, width: 3),
-                            ),
-                            child: const Icon(
-                              Icons.cloud_upload,
-                              size: 40,
-                              color: Colors.blue,
-                            ),
-                          ),
-                          SizedBox(height: 12),
-                          Text(
-                            'Processing Speech...',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textDark,
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            _transcriptionStatus,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: AppColors.textMedium,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
                       )
                     else
                       Column(
@@ -443,26 +352,13 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: AppColors.border),
                             ),
-                            child: Column(
-                              children: [
-                                Text(
-                                  'Time: ${_testStartTime != null ? DateTime.now().difference(_testStartTime!).inSeconds : 0}s / ${_minimumTestDuration.inSeconds}s min',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    color: _canFinish ? Colors.green : Colors.orange,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Recording to file for medical transcription',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.textMedium,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
+                            child: Text(
+                              'Time: ${_elapsedSeconds}s / ${_minimumTestDuration.inSeconds}s min',
+                              style: TextStyle(
+                                fontSize: 20,
+                                color: _canFinish ? Colors.green : Colors.orange,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                           SizedBox(height: 16),
@@ -481,11 +377,9 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                             ),
                             child: SingleChildScrollView(
                               child: Text(
-                                _isTranscribing 
-                                    ? 'Processing your speech with medical transcription...\n\n$_transcriptionStatus'
-                                    : _transcript.isEmpty 
-                                        ? 'Your speech will appear here after processing...' 
-                                        : _transcript,
+                                _transcript.isEmpty 
+                                    ? 'Your speech will appear here...' 
+                                    : _transcript,
                                 style: TextStyle(
                                   fontSize: 16,
                                   color: _transcript.isEmpty 
@@ -510,7 +404,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                                 padding: EdgeInsets.all(18),
                               ),
                               child: Text(
-                                _canFinish ? 'Stop Recording & Process' : 'Recording (Min 1 min required)',
+                                _canFinish ? 'Stop Recording' : 'Recording (Min 1 min required)',
                                 style: TextStyle(fontSize: 22),
                               ),
                             ),
@@ -523,87 +417,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  /// Create mock transcription result for testing when AWS services are unavailable
-  SpeechAnalysis _createMockTranscriptionResult(Duration testDuration) {
-    // Generate a realistic mock transcript based on cookie theft picture description
-    const mockTranscript = "I see a picture of a kitchen scene where a woman is doing dishes at the sink. There's a young boy standing on a stool trying to reach some cookies from a jar on the counter. The stool looks like it's about to tip over, and there's water overflowing from the sink onto the floor. The boy has a guilty expression on his face, and the cookies are scattered on the counter. The mother doesn't seem to notice what's happening behind her. This looks like a classic cookie theft scenario where the child is getting into mischief while the parent is distracted.";
-
-    // Calculate word count
-    final words = mockTranscript.split(RegExp(r'\s+'));
-    final wordCount = words.length;
-
-    // Simulate some analysis metrics
-    final fillerWordCount = (wordCount * 0.05).round(); // 5% filler words
-    final fillerRate = (fillerWordCount / wordCount) * 100;
-
-    // Simulate pauses (roughly 1 pause per 20 words)
-    final pauseCount = (wordCount / 20).round();
-    final totalPauseDuration = pauseCount * 0.8; // 0.8 seconds per pause
-    final avgPauseDuration = pauseCount > 0 ? totalPauseDuration / pauseCount : 0.0;
-
-    // Speaking rate (words per minute)
-    final durationInMinutes = testDuration.inSeconds / 60.0;
-    final speakingRate = durationInMinutes > 0 ? wordCount / durationInMinutes : 120.0;
-
-    return SpeechAnalysis(
-      wordCount: wordCount,
-      fillerWordCount: fillerWordCount,
-      fillerRate: fillerRate,
-      pauseCount: pauseCount,
-      totalPauseDuration: totalPauseDuration,
-      avgPauseDuration: avgPauseDuration,
-      speakingRate: speakingRate,
-      duration: testDuration.inSeconds.toDouble(),
-      transcript: mockTranscript,
-    );
-  }
-
-  /// Handle transcription completion
-  void _handleTranscriptionComplete(SpeechAnalysis analysis) {
-    if (!mounted) return;
-
-    // Check minimum word count
-    if (analysis.wordCount < _minimumWordCount) {
-      setState(() => _isTranscribing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Test requires at least $_minimumWordCount words. You spoke ${analysis.wordCount} words. Please try again.'),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 5),
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isTranscribing = false;
-      _transcript = '''
-${analysis.transcript}
-
-📊 Speech Analysis:
-• Words spoken: ${analysis.wordCount}
-• Filler words: ${analysis.fillerWordCount} (${analysis.fillerRate.toStringAsFixed(1)}%)
-• Speaking rate: ${analysis.speakingRate.toStringAsFixed(1)} words/minute
-• Pauses: ${analysis.pauseCount} (avg ${analysis.avgPauseDuration.toStringAsFixed(2)}s)
-• Duration: ${analysis.duration.toStringAsFixed(1)} seconds
-
-✅ Test completed successfully!''';
-    });
-
-    // Update test progress
-    final progress = Provider.of<TestProgress>(context, listen: false);
-    progress.markSpeechCompleted();
-
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Speech test completed! Results saved.'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 3),
       ),
     );
   }

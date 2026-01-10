@@ -9,9 +9,37 @@ import '../utils/logger.dart';
 /// Secure AWS Storage Service
 class AWSStorageService {
   final AWSAuthService _authService;
-  
+
   AWSStorageService(this._authService);
-  
+
+  /// Upload a text file to S3 with a specific key
+  Future<bool> uploadTextFile(String path, String key) async {
+    try {
+      final file = File(path);
+      if (!await file.exists()) {
+        throw Exception('Text file not found: $path');
+      }
+
+      AppLogger.logger.info('Uploading text file to S3: $key');
+
+      final result = await Amplify.Storage.uploadFile(
+        localFile: AWSFile.fromPath(path),
+        path: StoragePath.fromString(key),
+        options: const StorageUploadFileOptions(
+          pluginOptions: S3UploadFilePluginOptions(
+            getProperties: true,
+          ),
+        ),
+      ).result;
+
+      AppLogger.logger.info('Text file upload complete: ${result.uploadedItem.path}');
+      return true;
+    } catch (e) {
+      AppLogger.logger.severe('Text file upload error: $e');
+      return false;
+    }
+  }
+
   // Upload audio file to S3 securely
   Future<String?> uploadAudioFile(String localPath) async {
     try {
@@ -19,25 +47,24 @@ class AWSStorageService {
       if (userId == null) {
         throw Exception('User not authenticated');
       }
-      
+
       final file = File(localPath);
       if (!await file.exists()) {
         throw Exception('Audio file not found');
       }
-      
+
       // Generate unique S3 key with timestamp
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = 'speech_$timestamp.wav';
-      //final s3Key = 'private/$userId/audio/$fileName';
       final identityId = await _authService.getIdentityId();
       if (identityId == null) {
         throw Exception('No identity ID available');
       }
 
       final s3Key = 'private/$identityId/audio/$fileName';
-      
+
       AppLogger.logger.info('Uploading to S3: $s3Key');
-      
+
       // Upload to S3 with Amplify Storage
       final result = await Amplify.Storage.uploadFile(
         localFile: AWSFile.fromPath(localPath),
@@ -48,12 +75,12 @@ class AWSStorageService {
           ),
         ),
       ).result;
-      
+
       AppLogger.logger.info('Upload complete: ${result.uploadedItem.path}');
-      
+
       // Return the S3 key for later reference
       return s3Key;
-      
+
     } catch (e) {
       // Check if this is an identity pool related error
       if (e.toString().contains('InvalidAccountTypeException') ||

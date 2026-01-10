@@ -12,8 +12,9 @@ PODS:
   - device_info_plus (0.0.1):
     - Flutter
   - Flutter (1.0.0)
-  - flutter_secure_storage (6.0.0):
+  - flutter_secure_storage_darwin (10.0.0):
     - Flutter
+    - FlutterMacOS
   - flutter_sound (9.30.0):
     - Flutter
     - flutter_sound_core (= 9.30.0)
@@ -299,7 +300,7 @@ DEPENDENCIES:
   - camera_avfoundation (from `.symlinks/plugins/camera_avfoundation/ios`)
   - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
   - Flutter (from `Flutter`)
-  - flutter_secure_storage (from `.symlinks/plugins/flutter_secure_storage/ios`)
+  - flutter_secure_storage_darwin (from `.symlinks/plugins/flutter_secure_storage_darwin/darwin`)
   - flutter_sound (from `.symlinks/plugins/flutter_sound/ios`)
   - flutter_tts (from `.symlinks/plugins/flutter_tts/ios`)
   - google_mlkit_barcode_scanning (from `.symlinks/plugins/google_mlkit_barcode_scanning/ios`)
@@ -380,8 +381,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/device_info_plus/ios"
   Flutter:
     :path: Flutter
-  flutter_secure_storage:
-    :path: ".symlinks/plugins/flutter_secure_storage/ios"
+  flutter_secure_storage_darwin:
+    :path: ".symlinks/plugins/flutter_secure_storage_darwin/darwin"
   flutter_sound:
     :path: ".symlinks/plugins/flutter_sound/ios"
   flutter_tts:
@@ -441,10 +442,10 @@ SPEC CHECKSUMS:
   CwlCatchExceptionSupport: 54ccab8d8c78907b57f99717fb19d4cc3bce02dc
   device_info_plus: 21fcca2080fbcd348be798aa36c3e5ed849eefbe
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
-  flutter_secure_storage: 1ed9476fba7e7a782b22888f956cce43e2c62f13
+  flutter_secure_storage_darwin: acdb3f316ed05a3e68f856e0353b133eec373a23
   flutter_sound: d95194f6476c9ad211d22b3a414d852c12c7ca44
   flutter_sound_core: 7f2626d249d3a57bfa6da892ef7e22d234482c1a
-  flutter_tts: b88dbc8655d3dc961bc4a796e4e16a4cc1795833
+  flutter_tts: 35ac3c7d42412733e795ea96ad2d7e05d0a75113
   google_mlkit_barcode_scanning: 8f5987f244a43fe1167689c548342a5174108159
   google_mlkit_commons: 2abe6a70e1824e431d16a51085cb475b672c8aab
   google_mlkit_digital_ink_recognition: 17bf08581ec4c778fe1ac525302fd3a10e8799e6
