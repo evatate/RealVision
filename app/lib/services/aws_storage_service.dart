@@ -32,7 +32,8 @@ class AWSStorageService {
         ),
       ).result;
 
-      AppLogger.logger.info('Text file upload complete: ${result.uploadedItem.path}');
+      AppLogger.logger
+          .info('Text file upload complete: ${result.uploadedItem.path}');
       return true;
     } catch (e) {
       AppLogger.logger.severe('Text file upload error: $e');
@@ -80,20 +81,20 @@ class AWSStorageService {
 
       // Return the S3 key for later reference
       return s3Key;
-
     } catch (e) {
       // Check if this is an identity pool related error
       if (e.toString().contains('InvalidAccountTypeException') ||
           e.toString().contains('No identity pool registered') ||
           e.toString().contains('identity pool')) {
-        AppLogger.logger.warning('AWS S3 upload failed - identity pool not configured: $e');
+        AppLogger.logger
+            .warning('AWS S3 upload failed - identity pool not configured: $e');
       } else {
         AppLogger.logger.severe('Upload error: $e');
       }
       return null;
     }
   }
-  
+
   // Upload any file to S3 securely
   Future<String?> uploadFile(String localPath, String fileType) async {
     try {
@@ -101,24 +102,26 @@ class AWSStorageService {
       if (userId == null) {
         throw Exception('User not authenticated');
       }
-      
+
       final file = File(localPath);
       if (!await file.exists()) {
         throw Exception('File not found: $localPath');
       }
-      
+
       // Generate unique S3 key with timestamp
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = '${fileType}_$timestamp.json';
+      // keep original extension
+      final extension = localPath.split('.').last;
+      final fileName = '${fileType}_$timestamp.$extension';
       final identityId = await _authService.getIdentityId();
       if (identityId == null) {
         throw Exception('No identity ID available');
       }
 
       final s3Key = 'private/$identityId/data/$fileName';
-      
+
       AppLogger.logger.info('Uploading $fileType data to S3: $s3Key');
-      
+
       // Upload to S3 with Amplify Storage
       final result = await Amplify.Storage.uploadFile(
         localFile: AWSFile.fromPath(localPath),
@@ -129,25 +132,25 @@ class AWSStorageService {
           ),
         ),
       ).result;
-      
+
       AppLogger.logger.info('Upload complete: ${result.uploadedItem.path}');
-      
+
       // Return the S3 key for later reference
       return s3Key;
-      
     } catch (e) {
       // Check if this is an identity pool related error
       if (e.toString().contains('InvalidAccountTypeException') ||
           e.toString().contains('No identity pool registered') ||
           e.toString().contains('identity pool')) {
-        AppLogger.logger.warning('AWS S3 upload failed - identity pool not configured: $e');
+        AppLogger.logger
+            .warning('AWS S3 upload failed - identity pool not configured: $e');
       } else {
         AppLogger.logger.severe('Upload error: $e');
       }
       return null;
     }
   }
-  
+
   /// Trigger AWS Transcribe Medical for audio transcription
   Future<Map<String, dynamic>?> transcribeAudio(String s3Key) async {
     try {
@@ -155,15 +158,16 @@ class AWSStorageService {
       if (userId == null) {
         throw Exception('User not authenticated');
       }
-      
+
       // Get auth headers with Cognito tokens
       final headers = await _authService.getAuthHeaders();
-      
+
       // API Gateway endpoint URL
-      const apiEndpoint = 'https://3nn8vej5pf.execute-api.us-east-2.amazonaws.com/prod/transcribe';
-      
+      const apiEndpoint =
+          'https://3nn8vej5pf.execute-api.us-east-2.amazonaws.com/prod/transcribe';
+
       AppLogger.logger.info('📞 Calling Transcribe API: $apiEndpoint');
-      
+
       final response = await http.post(
         Uri.parse(apiEndpoint),
         headers: {
@@ -178,38 +182,39 @@ class AWSStorageService {
           'type': 'DICTATION',
         }),
       );
-      
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         AppLogger.logger.info('Transcription initiated: ${data['jobName']}');
         return data;
       } else {
-        AppLogger.logger.severe('Transcription error: ${response.statusCode} - ${response.body}');
+        AppLogger.logger.severe(
+            'Transcription error: ${response.statusCode} - ${response.body}');
         return null;
       }
-      
     } catch (e) {
       AppLogger.logger.severe('Transcription error: $e');
       return null;
     }
   }
-  
+
   /// Get transcription results (poll until complete)
   Future<SpeechAnalysis?> getTranscriptionResults(String jobName) async {
     try {
       final headers = await _authService.getAuthHeaders();
-      
+
       // API endpoint to get results
-      const apiEndpoint = 'https://3nn8vej5pf.execute-api.us-east-2.amazonaws.com/prod/transcribe/results';
-      
+      const apiEndpoint =
+          'https://3nn8vej5pf.execute-api.us-east-2.amazonaws.com/prod/transcribe/results';
+
       final response = await http.get(
         Uri.parse('$apiEndpoint?jobName=$jobName'),
         headers: headers,
       );
-      
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        
+
         if (data['status'] == 'COMPLETED') {
           AppLogger.logger.info('Transcription complete!');
           return _parseTranscribeResults(data['transcript']);
@@ -221,38 +226,39 @@ class AWSStorageService {
           return null;
         }
       }
-      
+
       return null;
-      
     } catch (e) {
       AppLogger.logger.severe('Error getting results: $e');
       return null;
     }
   }
-  
+
   /// Parse Transcribe Medical results
   SpeechAnalysis _parseTranscribeResults(Map<String, dynamic> transcript) {
-    final text = transcript['results']['transcripts'][0]['transcript'] as String;
+    final text =
+        transcript['results']['transcripts'][0]['transcript'] as String;
     final items = transcript['results']['items'] as List;
-    
+
     int wordCount = 0;
     int fillerWordCount = 0;
     int pauseCount = 0;
     double totalPauseDuration = 0.0;
-    
+
     final fillers = {'uh', 'um', 'uhm', 'ah', 'er'};
-    
+
     double? lastEndTime;
-    
+
     for (var item in items) {
       if (item['type'] == 'pronunciation') {
         wordCount++;
-        
-        final word = (item['alternatives'][0]['content'] as String).toLowerCase();
+
+        final word =
+            (item['alternatives'][0]['content'] as String).toLowerCase();
         if (fillers.contains(word)) {
           fillerWordCount++;
         }
-        
+
         // Detect pauses
         final startTime = double.parse(item['start_time']);
         if (lastEndTime != null) {
@@ -262,16 +268,18 @@ class AWSStorageService {
             totalPauseDuration += pause;
           }
         }
-        
+
         lastEndTime = double.parse(item['end_time']);
       }
     }
-    
+
     final duration = lastEndTime ?? 0.0;
     final speakingRate = duration > 0 ? (wordCount / (duration / 60.0)) : 0.0;
-    final fillerRate = wordCount > 0 ? (fillerWordCount / wordCount) * 100 : 0.0;
-    final avgPauseDuration = pauseCount > 0 ? totalPauseDuration / pauseCount : 0.0;
-    
+    final fillerRate =
+        wordCount > 0 ? (fillerWordCount / wordCount) * 100 : 0.0;
+    final avgPauseDuration =
+        pauseCount > 0 ? totalPauseDuration / pauseCount : 0.0;
+
     return SpeechAnalysis(
       wordCount: wordCount,
       fillerWordCount: fillerWordCount,
@@ -285,7 +293,6 @@ class AWSStorageService {
     );
   }
 
-  
   /// Download file from S3
   Future<String?> downloadFile(String s3Key, String localPath) async {
     try {
@@ -293,41 +300,94 @@ class AWSStorageService {
         path: StoragePath.fromString(s3Key),
         localFile: AWSFile.fromPath(localPath),
       ).result;
-      
+
       AppLogger.logger.info('Download complete: ${result.localFile.path}');
       return result.localFile.path;
-      
     } catch (e) {
       // Check if this is an identity pool related error
       if (e.toString().contains('InvalidAccountTypeException') ||
           e.toString().contains('No identity pool registered') ||
           e.toString().contains('identity pool')) {
-        AppLogger.logger.warning('AWS S3 download failed - identity pool not configured: $e');
+        AppLogger.logger.warning(
+            'AWS S3 download failed - identity pool not configured: $e');
       } else {
         AppLogger.logger.severe('Download error: $e');
       }
       return null;
     }
   }
-  
+
+  /// Upload transcript file to S3 securely (same structure as audio files)
+  Future<String?> uploadTranscriptFile(String localPath) async {
+    try {
+      final userId = await _authService.getCurrentUserId();
+      if (userId == null) {
+        throw Exception('User not authenticated');
+      }
+
+      final file = File(localPath);
+      if (!await file.exists()) {
+        throw Exception('Transcript file not found');
+      }
+
+      // Generate unique S3 key with timestamp
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'speech_$timestamp.cha';
+      final identityId = await _authService.getIdentityId();
+      if (identityId == null) {
+        throw Exception('No identity ID available');
+      }
+
+      final s3Key = 'private/$identityId/transcripts/$fileName';
+
+      AppLogger.logger.info('Uploading transcript to S3: $s3Key');
+
+      // Upload to S3 with Amplify Storage
+      final result = await Amplify.Storage.uploadFile(
+        localFile: AWSFile.fromPath(localPath),
+        path: StoragePath.fromString(s3Key),
+        options: const StorageUploadFileOptions(
+          pluginOptions: S3UploadFilePluginOptions(
+            getProperties: true,
+          ),
+        ),
+      ).result;
+
+      AppLogger.logger.info('Upload complete: ${result.uploadedItem.path}');
+
+      // Return the S3 key for later reference
+      return s3Key;
+    } catch (e) {
+      if (e.toString().contains('InvalidAccountTypeException') ||
+          e.toString().contains('No identity pool registered') ||
+          e.toString().contains('identity pool')) {
+        AppLogger.logger
+            .warning('AWS S3 upload failed - identity pool not configured: $e');
+      } else {
+        AppLogger.logger.severe('Transcript upload error: $e');
+      }
+      return null;
+    }
+  }
+
   /// List all audio files for current user
   Future<List<String>> listUserAudioFiles() async {
     try {
       final userId = await _authService.getCurrentUserId();
       if (userId == null) return [];
-      
+
       final result = await Amplify.Storage.list(
         path: StoragePath.fromString('private/$userId/audio/'),
       ).result;
-      
+
       return result.items.map((item) => item.path).toList();
-      
     } catch (e) {
       // Check if this is an identity pool related error
       if (e.toString().contains('InvalidAccountTypeException') ||
           e.toString().contains('No identity pool registered') ||
           e.toString().contains('identity pool')) {
-        AppLogger.logger.warning('AWS S3 list failed - identity pool not configured: $e');
+        AppLogger.logger
+            .warning('AWS S3 list failed - identity pool not configured: $e');
       } else {
         AppLogger.logger.severe('List error: $e');
       }
@@ -346,7 +406,7 @@ class SpeechAnalysis {
   final double speakingRate;
   final double duration;
   final String transcript;
-  
+
   SpeechAnalysis({
     required this.wordCount,
     required this.fillerWordCount,
@@ -358,7 +418,7 @@ class SpeechAnalysis {
     required this.duration,
     required this.transcript,
   });
-  
+
   @override
   String toString() {
     return '''

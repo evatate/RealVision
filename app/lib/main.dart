@@ -4,6 +4,7 @@ import 'models/test_progress.dart';
 import 'utils/colors.dart';
 import '../services/service_locator.dart';
 import 'screens/splash_screen.dart';
+import 'screens/home_screen.dart';
 import 'services/aws_auth_service.dart';
 import 'utils/logger.dart';
 
@@ -57,6 +58,9 @@ class RealVisionApp extends StatelessWidget {
             ),
           ),
         ),
+        routes: {
+          '/home': (context) => const HomeScreen(),
+        },
         home: const SplashScreen(),
       ),
     );

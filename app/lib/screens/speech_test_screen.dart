@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
+import 'package:path_provider/path_provider.dart';
 import '../models/test_progress.dart';
 import '../services/audio_service.dart';
 import '../services/aws_storage_service.dart';
@@ -26,7 +27,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
   String _transcript = '';
   bool _initialized = false;
   bool _hasSpoken = false;
-  
+
   // Timing and validation variables
   DateTime? _testStartTime;
   bool _canFinish = false;
@@ -45,12 +46,12 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     try {
       await _audioService.initialize();
       setState(() => _initialized = true);
-      
+
       await Future.delayed(const Duration(milliseconds: 1500));
-      
+
       if (mounted && !_hasSpoken) {
         await _audioService.speak(
-          'Please describe everything you see in the picture and explain what is happening, what people are doing, and how the scene fits together. Continue speaking until I tell you to stop.',
+          'Please describe everything you see happening in this picture. Take your time.',
         );
         _hasSpoken = true;
       }
@@ -68,14 +69,14 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       _canFinish = false;
       _elapsedSeconds = 0;
     });
-    
+
     // Start minimum duration timer
     _minimumTimeTimer = Timer(_minimumTestDuration, () {
       if (mounted) {
         setState(() => _canFinish = true);
       }
     });
-    
+
     // Start elapsed time counter
     _elapsedTimeTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted && _isListening) {
@@ -132,15 +133,16 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
 
   Future<void> _stopTest() async {
     // Check minimum duration before proceeding
-    final testDuration = _testStartTime != null 
-        ? DateTime.now().difference(_testStartTime!) 
+    final testDuration = _testStartTime != null
+        ? DateTime.now().difference(_testStartTime!)
         : Duration.zero;
-    
+
     if (testDuration < _minimumTestDuration) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Please continue speaking. Test must run for at least ${_minimumTestDuration.inMinutes} minute(s). Current duration: ${testDuration.inSeconds} seconds.'),
+            content: Text(
+                'Please continue speaking. Test must run for at least ${_minimumTestDuration.inMinutes} minute(s). Current duration: ${testDuration.inSeconds} seconds.'),
             backgroundColor: Colors.orange,
             duration: const Duration(seconds: 5),
           ),
@@ -176,7 +178,8 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No speech detected or recording too short. Please try again and speak clearly into the microphone.'),
+            content: Text(
+                'No speech detected or recording too short. Please try again and speak clearly into the microphone.'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 5),
           ),
@@ -185,34 +188,59 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       return;
     }
 
-    // WAV upload and CHA transcript
+    // Generate and upload CHA transcript
+    try {
+      final segments = _audioService.getSegments();
+      AppLogger.logger.info('Segments length: ${segments.length}');
+
+      // If no segments from audio service, create one from the final transcript
+      final List<SpeechSegment> chaSegments = segments.isEmpty
+          ? [
+              SpeechSegment(
+                text: finalTranscript,
+                start: Duration.zero,
+                end: testDuration,
+              )
+            ]
+          : segments;
+
+      final cha = ChaTranscriptBuilder.build(
+        segments: chaSegments,
+        totalDuration: testDuration,
+      );
+
+      if (segments.isEmpty) {
+        AppLogger.logger
+            .warning('No segments from audio service, using final transcript.');
+      }
+
+      // Create temporary CHA file
+      final dir = await getApplicationDocumentsDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final chaFilePath = '${dir.path}/speech_$timestamp.cha';
+      final chaFile = File(chaFilePath);
+      await chaFile.writeAsString(cha);
+      AppLogger.logger.info('CHA file created: $chaFilePath');
+
+      // Upload using the same method as audio files, just pass the file path
+      final chaS3Key = await _awsStorage.uploadFile(chaFilePath, 'transcript');
+
+      if (chaS3Key != null) {
+        AppLogger.logger.info('CHA uploaded to S3: $chaS3Key');
+      } else {
+        AppLogger.logger.severe('CHA upload to S3 failed');
+      }
+    } catch (e) {
+      AppLogger.logger.severe('CHA generation/upload failed: $e');
+    }
+
+    // WAV upload (iOS only)
     if (wavPath != null && File(wavPath).existsSync()) {
       try {
         AppLogger.logger.info('Uploading WAV file to S3: $wavPath');
         final s3Key = await _awsStorage.uploadAudioFile(wavPath);
         if (s3Key != null) {
           AppLogger.logger.info('WAV uploaded to S3: $s3Key');
-          final segments = _audioService.getSegments();
-          final cha = ChaTranscriptBuilder.build(
-            segments: segments,
-            totalDuration: const Duration(seconds: 120),
-          );
-          final chaFile = File('$wavPath.cha');
-          try {
-            await chaFile.writeAsString(cha);
-            AppLogger.logger.info('CHA file created: ${chaFile.path}');
-            try {
-              await _awsStorage.uploadTextFile(
-                chaFile.path,
-                s3Key.replaceAll('.wav', '.cha'),
-              );
-              AppLogger.logger.info('CHA uploaded to S3: ${s3Key.replaceAll('.wav', '.cha')}');
-            } catch (e) {
-              AppLogger.logger.severe('CHA upload to S3 failed: $e');
-            }
-          } catch (e) {
-            AppLogger.logger.severe('Failed to write CHA file: $e');
-          }
         } else {
           AppLogger.logger.severe('S3 upload failed for $wavPath');
         }
@@ -220,7 +248,8 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
         AppLogger.logger.severe('WAV upload to S3 failed: $e');
       }
     } else {
-      AppLogger.logger.severe('WAV file does not exist or path is null: $wavPath');
+      AppLogger.logger.info(
+          'WAV recording not available (Android uses speech-to-text only)');
     }
 
     if (mounted) {
@@ -230,7 +259,8 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     await _audioService.speak('Thank you. Speech test complete.');
 
     AppLogger.logger.info('Speech transcript: $finalTranscript');
-    AppLogger.logger.info('Transcript length: ${finalTranscript.split(' ').length} words');
+    AppLogger.logger
+        .info('Transcript length: ${finalTranscript.split(' ').length} words');
 
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) Navigator.pop(context);
@@ -288,7 +318,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                       ),
                     ),
                     SizedBox(height: 16),
-                    
                     Text(
                       'Describe everything you see',
                       style: TextStyle(
@@ -299,7 +328,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                       textAlign: TextAlign.center,
                     ),
                     SizedBox(height: 20),
-                    
                     if (!_isListening)
                       SizedBox(
                         width: double.infinity,
@@ -343,7 +371,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                             ),
                           ),
                           SizedBox(height: 8),
-                          
+
                           // Status information
                           Container(
                             padding: const EdgeInsets.all(12),
@@ -356,20 +384,22 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                               'Time: ${_elapsedSeconds}s / ${_minimumTestDuration.inSeconds}s min',
                               style: TextStyle(
                                 fontSize: 20,
-                                color: _canFinish ? Colors.green : Colors.orange,
+                                color:
+                                    _canFinish ? Colors.green : Colors.orange,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
                           SizedBox(height: 16),
-                          
+
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: AppColors.cardBackground,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.border, width: 2),
+                              border:
+                                  Border.all(color: AppColors.border, width: 2),
                             ),
                             constraints: const BoxConstraints(
                               minHeight: 100,
@@ -377,34 +407,37 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                             ),
                             child: SingleChildScrollView(
                               child: Text(
-                                _transcript.isEmpty 
-                                    ? 'Your speech will appear here...' 
+                                _transcript.isEmpty
+                                    ? 'Your speech will appear here...'
                                     : _transcript,
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: _transcript.isEmpty 
-                                      ? AppColors.textMedium 
+                                  color: _transcript.isEmpty
+                                      ? AppColors.textMedium
                                       : AppColors.textDark,
-                                  fontStyle: _transcript.isEmpty 
-                                      ? FontStyle.italic 
+                                  fontStyle: _transcript.isEmpty
+                                      ? FontStyle.italic
                                       : FontStyle.normal,
                                 ),
                               ),
                             ),
                           ),
                           SizedBox(height: 16),
-                          
+
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
                               onPressed: _canFinish ? _stopTest : null,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: _canFinish ? Colors.red : Colors.grey,
+                                backgroundColor:
+                                    _canFinish ? Colors.red : Colors.grey,
                                 foregroundColor: Colors.white,
                                 padding: EdgeInsets.all(18),
                               ),
                               child: Text(
-                                _canFinish ? 'Stop Recording' : 'Recording (Min 1 min required)',
+                                _canFinish
+                                    ? 'Stop Recording'
+                                    : 'Recording (Min 1 min required)',
                                 style: TextStyle(fontSize: 22),
                               ),
                             ),
