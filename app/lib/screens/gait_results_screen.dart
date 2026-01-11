@@ -202,7 +202,9 @@ class _GaitResultsScreenState extends State<GaitResultsScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton(
-                        onPressed: () => Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false),
+                        onPressed: () {
+                          Navigator.of(context).popUntil((route) => route.isFirst);
+                        },
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(color: AppColors.primary),
                           padding: const EdgeInsets.all(16),
@@ -232,19 +234,31 @@ class _GaitResultsScreenState extends State<GaitResultsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 16,
-              color: AppColors.textMedium,
+          Flexible(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                color: AppColors.textMedium,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textDark,
+          SizedBox(width: 8),
+          Flexible(
+            flex: 3,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textDark,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              textAlign: TextAlign.right,
             ),
           ),
         ],
@@ -261,7 +275,8 @@ class _GaitResultsScreenState extends State<GaitResultsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
+              Flexible(
+                flex: 2,
                 child: Text(
                   label,
                   style: TextStyle(
@@ -269,14 +284,23 @@ class _GaitResultsScreenState extends State<GaitResultsScreen> {
                     fontWeight: FontWeight.w500,
                     color: AppColors.textDark,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
+              SizedBox(width: 8),
+              Flexible(
+                flex: 3,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  textAlign: TextAlign.right,
                 ),
               ),
             ],
@@ -288,6 +312,8 @@ class _GaitResultsScreenState extends State<GaitResultsScreen> {
               fontSize: 14,
               color: AppColors.textMedium,
             ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
           ),
         ],
       ),

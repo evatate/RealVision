@@ -247,78 +247,79 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
 
   Widget _buildRecordingScreen() {
     final currentSteps = _motionService.currentStepCount;
-    
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          Icons.directions_walk,
-          size: 100,
-          color: AppColors.primary,
-        ),
-        SizedBox(height: 32),
-        
-        Text(
-          'Recording Walk',
-          style: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textDark,
+
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(height: 24),
+          Icon(
+            Icons.directions_walk,
+            size: 100,
+            color: AppColors.primary,
           ),
-        ),
-        
-        SizedBox(height: 48),
-        
-        // Step counter
-        Container(
-          padding: EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.green[50],
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.green[300]!, width: 3),
+          SizedBox(height: 32),
+          Text(
+            'Recording Walk',
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textDark,
+            ),
+            textAlign: TextAlign.center,
           ),
-          child: Column(
-            children: [
-              Text(
-                '$currentSteps',
-                style: TextStyle(
-                  fontSize: 64,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
+          SizedBox(height: 32),
+          Container(
+            padding: EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.green[50],
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.green[300]!, width: 3),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  '$currentSteps',
+                  style: TextStyle(
+                    fontSize: 64,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-              ),
-              Text(
-                'steps',
-                style: TextStyle(
-                  fontSize: 24,
-                  color: AppColors.textMedium,
+                Text(
+                  'steps',
+                  style: TextStyle(
+                    fontSize: 24,
+                    color: AppColors.textMedium,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        
-        SizedBox(height: 32),
-        
-        Text(
-          '${_countdown}s',
-          style: TextStyle(
-            fontSize: 48,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textDark,
+          SizedBox(height: 32),
+          Text(
+            '${_countdown}s',
+            style: TextStyle(
+              fontSize: 48,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textDark,
+            ),
+            textAlign: TextAlign.center,
           ),
-        ),
-        
-        SizedBox(height: 24),
-        
-        Text(
-          'Keep walking normally',
-          style: TextStyle(
-            fontSize: 24,
-            color: AppColors.textMedium,
+          SizedBox(height: 24),
+          Text(
+            'Keep walking normally',
+            style: TextStyle(
+              fontSize: 24,
+              color: AppColors.textMedium,
+            ),
+            textAlign: TextAlign.center,
           ),
-        ),
-      ],
+          SizedBox(height: 24),
+        ],
+      ),
     );
   }
 }
