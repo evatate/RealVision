@@ -365,27 +365,31 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Column(
-          children: [
-            const Breadcrumb(current: 'Smile Test'),
-            Expanded(
-              child: _currentPhase == SmilePhase.none
-                  ? _buildStartScreen()
-                  : _buildTestScreen(),
-            ),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Breadcrumb(current: 'Smile Test'),
+              if (_currentPhase == SmilePhase.none)
+                _buildStartScreen()
+              else
+                _buildTestScreen(),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildStartScreen() {
-    return Center(
+    return SingleChildScrollView(
       child: Padding(
         padding: EdgeInsets.all(AppConstants.buttonSpacing),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            SizedBox(height: 32),
             Text(
               'Smile Test',
               style: TextStyle(
@@ -393,17 +397,15 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
                 fontWeight: FontWeight.bold,
                 color: AppColors.textDark,
               ),
+              textAlign: TextAlign.center,
             ),
             SizedBox(height: 32),
-            
             Icon(
               Icons.sentiment_satisfied,
               size: 80,
               color: AppColors.primary,
             ),
-            
             SizedBox(height: 48),
-            
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -419,6 +421,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
                 ),
               ),
             ),
+            SizedBox(height: 32),
           ],
         ),
       ),
@@ -426,124 +429,104 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   }
 
   Widget _buildTestScreen() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isLandscape = screenWidth > screenHeight;
+    final cameraHeight = isLandscape
+        ? screenHeight * 0.6
+        : screenWidth * 0.9 / (_cameraService.controller?.value.aspectRatio ?? 1.0);
     return Padding(
       padding: EdgeInsets.all(16),
-      child: Column(
-        children: [
-          // Camera, 60% of space
-          Expanded(
-            flex: 60,
-            child: _cameraInitialized && _cameraService.controller != null
-                ? Center(
-                    child: AspectRatio(
-                      aspectRatio: _cameraService.controller!.value.aspectRatio,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: _isFaceDetected ? AppColors.success : Colors.red,
-                            width: 4,
-                          ),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: OverflowBox(
-                            alignment: Alignment.center,
-                            child: FittedBox(
-                              fit: BoxFit.cover,
-                              child: SizedBox(
-                                width: MediaQuery.of(context).size.width * 0.9,
-                                height: (MediaQuery.of(context).size.width * 0.9) / _cameraService.controller!.value.aspectRatio,
-                                child: CameraPreview(_cameraService.controller!),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                : Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Center(
-                      child: CircularProgressIndicator(color: AppColors.primary),
-                    ),
-                  ),
-          ),
-          
-          Spacer(flex: 2),
-          
-          // Emoji
-          Text(
-            _getPhaseEmoji(),
-            style: const TextStyle(fontSize: 56),
-          ),
-          
-          Spacer(flex: 3),
-          
-          // Phase text
-          Text(
-            _getPhaseText(),
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textDark,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          
-          Spacer(flex: 3),
-          
-          // Countdown
-          if (_currentPhase != SmilePhase.complete)
-            Text(
-              '${_countdown}s',
-              style: TextStyle(
-                fontSize: 48,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
-              ),
-            ),
-          
-          Spacer(flex: 3),
-          
-          // Warning or debug info
-          if (!_isFaceDetected && _currentPhase != SmilePhase.complete)
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Camera preview with fixed height
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              height: cameraHeight,
               decoration: BoxDecoration(
-                color: Colors.red[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red, width: 2),
-              ),
-              child: Text(
-                '⚠️ Face NOT in frame',
-                style: TextStyle(
-                  color: Colors.red[700],
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _isFaceDetected ? AppColors.success : Colors.red,
+                  width: 4,
                 ),
               ),
-            )
-          else if (kDebugMode && _isFaceDetected && _currentPhase != SmilePhase.complete)
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
+              child: _cameraInitialized && _cameraService.controller != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: CameraPreview(_cameraService.controller!),
+                    )
+                  : Center(
+                      child: CircularProgressIndicator(color: AppColors.primary),
+                    ),
+            ),
+            const SizedBox(height: 16),
+            // Emoji
+            Center(
               child: Text(
-                'Smile: ${(_smileProbability * 100).toStringAsFixed(0)}%',
-                style: TextStyle(fontSize: 14, color: Colors.blue[900]),
+                _getPhaseEmoji(),
+                style: const TextStyle(fontSize: 56),
               ),
-            )
-          else
-            SizedBox(height: 32),
-            
-          Spacer(flex: 2),
-        ],
+            ),
+            const SizedBox(height: 16),
+            // Phase text
+            Text(
+              _getPhaseText(),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textDark,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            // Countdown
+            if (_currentPhase != SmilePhase.complete)
+              Center(
+                child: Text(
+                  '${_countdown}s',
+                  style: TextStyle(
+                    fontSize: 48,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 16),
+            // Warning or debug info
+            if (!_isFaceDetected && _currentPhase != SmilePhase.complete)
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red, width: 2),
+                ),
+                child: Text(
+                  '⚠️ Face NOT in frame',
+                  style: TextStyle(
+                    color: Colors.red[700],
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              )
+            else if (kDebugMode && _isFaceDetected && _currentPhase != SmilePhase.complete)
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Smile: ${(_smileProbability * 100).toStringAsFixed(0)}%',
+                  style: TextStyle(fontSize: 14, color: Colors.blue[900]),
+                ),
+              )
+            else
+              SizedBox(height: 32),
+          ],
+        ),
       ),
     );
   }
