@@ -2,6 +2,28 @@ import 'package:flutter/foundation.dart';
 import '../services/aws_storage_service.dart';
 
 class TestProgress with ChangeNotifier {
+  // Serialization
+  Map<String, dynamic> toMap() => {
+    'speechCompleted': _speechCompleted,
+    'fixationCompleted': _fixationCompleted,
+    'prosaccadeCompleted': _prosaccadeCompleted,
+    'pursuitCompleted': _pursuitCompleted,
+    'smileCompleted': _smileCompleted,
+    'gaitCompleted': _gaitCompleted,
+    // You can add more fields as needed
+  };
+
+  static TestProgress fromMap(Map<String, dynamic> map) {
+    final progress = TestProgress();
+    progress._speechCompleted = map['speechCompleted'] ?? false;
+    progress._fixationCompleted = map['fixationCompleted'] ?? false;
+    progress._prosaccadeCompleted = map['prosaccadeCompleted'] ?? false;
+    progress._pursuitCompleted = map['pursuitCompleted'] ?? false;
+    progress._smileCompleted = map['smileCompleted'] ?? false;
+    progress._gaitCompleted = map['gaitCompleted'] ?? false;
+    // You can add more fields as needed
+    return progress;
+  }
   bool _speechCompleted = false;
   bool _fixationCompleted = false;
   bool _prosaccadeCompleted = false;

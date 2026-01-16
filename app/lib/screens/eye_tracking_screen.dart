@@ -32,13 +32,13 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     int _getCurrentTrialNumber() {
       switch (_currentTask) {
         case EyeTrackingTask.fixation:
-          return _fixationTrialNumber + 1;
+          return _fixationTrialNumber;
         case EyeTrackingTask.prosaccade:
-          return _isPractice ? _trialIndex + 1 : _completedTrials + 1;
+          return _isPractice ? _trialIndex : _completedTrials;
         case EyeTrackingTask.pursuit:
-          return _pursuitTrialNumber + 1;
+          return _pursuitTrialNumber;
         default:
-          return 1;
+          return 0;
       }
     }
   late CameraService _cameraService = CameraService();
@@ -49,10 +49,10 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   String? _participantId;
 
   EyeTrackingTask _currentTask = EyeTrackingTask.none;
-  int _trialIndex = 0;        // which trial we're running (0-based, prosaccade only)
-  int _completedTrials = 0;   // how many trials have finished (prosaccade only)
-  int _fixationTrialNumber = 0; // for fixation block
-  int _pursuitTrialNumber = 0;  // for pursuit block
+  int _trialIndex = 0;
+  int _completedTrials = 0;
+  int _fixationTrialNumber = 0;
+  int _pursuitTrialNumber = 0;
   bool _isPractice = false;
   Offset? _targetPosition;
   Timer? _taskTimer;
@@ -154,30 +154,25 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
       _currentTask = originalTask;
     });
     
-    // Small pause after drift correction
     await Future.delayed(const Duration(milliseconds: 500));
   }
 
 bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
-    // fixation: strict frame count
     if (_currentTask == EyeTrackingTask.fixation && trialData.length < 30) {
       AppLogger.logger.warning('Fixation trial rejected: only ${trialData.length} frames (need 30+)');
       return false;
     }
 
-    // prosaccade: time-based rejection
     if (_currentTask == EyeTrackingTask.prosaccade && trialData.length < 15) {
       AppLogger.logger.warning('Prosaccade trial rejected: only ${trialData.length} frames (need 15+)');
       return false;
     }
 
-    // pursuit: needs enough frames to calculate velocity
     if (_currentTask == EyeTrackingTask.pursuit && trialData.length < 20) {
       AppLogger.logger.warning('Pursuit trial rejected: only ${trialData.length} frames (need 20+)');
       return false;
     }
 
-    // gap check, relaxed for pursuit since target is moving
     int largeGaps = 0;
     for (int i = 1; i < trialData.length; i++) {
       final gap = trialData[i].timestamp - trialData[i - 1].timestamp;
@@ -191,12 +186,10 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
       return false;
     }
 
-    // pursuit: skip mean distance check
     if (_currentTask == EyeTrackingTask.pursuit) {
       return true;
     }
 
-    // fixation and prosaccade:: Check mean distance to target
     final meanDistance = trialData.map((p) => p.distance).reduce((a, b) => a + b) / trialData.length;
 
     double threshold;
@@ -333,7 +326,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
     );
   }
 
-  void _showInstructions(String title, String instruction, VoidCallback onStart) {
+  void _showInstructions(String title, String instruction, String trialInfo, VoidCallback onStart) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -358,7 +351,25 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue[300]!, width: 2),
+              ),
+              child: Text(
+                trialInfo,
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.blue[900],
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -367,13 +378,14 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
                 border: Border.all(color: Colors.purple[300]!, width: 2),
               ),
               child: Text(
-                'Starts with a practice round',
+                'Keep your head still and move only your eyes',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 20,
                   fontStyle: FontStyle.italic,
                   color: const Color.fromARGB(255, 0, 0, 0),
                   fontWeight: FontWeight.w500,
                 ),
+                textAlign: TextAlign.center,
               ),
             ),
           ],
@@ -401,14 +413,14 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
       ),
     );
   }
-
-  Future<void> _startFixationTest() async {
+Future<void> _startFixationTest() async {
     _participantId ??= 'participant_${DateTime.now().millisecondsSinceEpoch}';
     _trials = [];
 
     _showInstructions(
       'Fixation Stability Test',
-      'Look closely at the red cross without blinking for 10 seconds',
+      'Look closely at the red cross without blinking for 10 seconds per trial',
+      'Practice + 3 test trials',
       () async {
         try {
           if (!mounted) return;
@@ -539,7 +551,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
       
       if (_fixationTrialNumber < maxTrials) {
         final label = _isPractice ? 'practice' : 'test';
-        _audioService.speak('${label.capitalize()} trial ${_fixationTrialNumber + 1}');
+        _audioService.speak('Next $label trial');
         Future.delayed(const Duration(seconds: 2), () async {
           await _performDriftCorrection();
           _runFixationTrial();
@@ -565,6 +577,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
     _showInstructions(
       'Pro-saccade Test',
       'Look at the target circle as quickly as possible when it appears',
+      'Practice + 30 test trials',
       () async {
         try {
           if (!mounted) return;
@@ -597,7 +610,6 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
 
     final int trialToken = _trialIndex;
 
-    // Hard stop at max trials before any delayed callbacks
     if (_isPractice && _trialIndex >= maxTrials) {
       AppLogger.logger.info('Prosaccade practice block complete. Transitioning to test trials.');
       setState(() {
@@ -606,7 +618,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
         _completedTrials = 0;
         _prosaccadeIndex = 0;
       });
-      _audioService.speak('Practice complete. Starting 40 test trials.');
+      _audioService.speak('Practice complete. Starting 30 test trials.');
       Future.delayed(const Duration(seconds: 2), () async {
         if (!mounted) {
           AppLogger.logger.warning('Not mounted after practice block.');
@@ -669,7 +681,6 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
       _showTarget = true;
     });
 
-    // Fixation before target appears
     final fixationDuration = 800 + Random().nextInt(400);
 
     Future.delayed(Duration(milliseconds: fixationDuration), () {
@@ -684,7 +695,6 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
         if (trialToken != _trialIndex) return;
         if (_completedTrials >= maxTrials) return;
 
-        // check index bounds
         Offset? pos;
         if (_isPractice) {
           pos = _getProsaccadePosition(_trialIndex % 8);
@@ -706,8 +716,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
           _showTarget = true;
         });
 
-        // Prosaccade target duration: 1.8–2.2 seconds (randomized)
-        final trialDurationMs = 1800 + Random().nextInt(400); // 1800–2200 ms
+        final trialDurationMs = 1800 + Random().nextInt(400);
         final trialStart = DateTime.now();
 
         Future.delayed(Duration(milliseconds: trialDurationMs), () {
@@ -718,7 +727,6 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
           final actualDurationMs = trialEnd.difference(trialStart).inMilliseconds;
           final trialResult = _eyeTrackingService.completeTrial();
 
-          // Reject if trial duration < 800ms (time-based, not frame-based)
           final qualityOk = actualDurationMs >= 800 && _checkTrialQuality(trialResult.frames);
 
           if (!mounted) return;
@@ -785,6 +793,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
     _showInstructions(
       'Smooth Pursuit Test',
       'Follow the red circle with your eyes as closely as possible',
+      'Practice + 12 test trials',
       () async {
         try {
           if (!mounted) return;
@@ -858,8 +867,10 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
       return;
     }
 
-    final isHorizontal = _pursuitTrialNumber % 2 == 0;
-    final speed = _pursuitTrialNumber % 4 < 2 ? 10 : 20;
+    _pursuitTrialNumber++;
+
+    final isHorizontal = (_pursuitTrialNumber - 1) % 2 == 0;
+    final speed = (_pursuitTrialNumber - 1) % 4 < 2 ? 10 : 20;
     final frequency = speed == 10 ? 0.25 : 0.5;
     
     _eyeTrackingService.clearData();
@@ -892,6 +903,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
           
           if (!qualityOk && !_isPractice) {
             _audioService.speak('Trial quality low. Repeating trial.');
+            _pursuitTrialNumber--;
             Future.delayed(const Duration(seconds: 2), () async {
               await _performDriftCorrection();
               _runPursuitTrial();
@@ -908,11 +920,14 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
               AppLogger.logger.info('Added pursuit trial ${_trials.length} with ${trialResult.frames.length} frames');
             }
 
-            setState(() => _pursuitTrialNumber++);
-            Future.delayed(const Duration(seconds: 1), () async {
-              await _performDriftCorrection();
+            if (_pursuitTrialNumber < maxTrials) {
+              Future.delayed(const Duration(seconds: 1), () async {
+                await _performDriftCorrection();
+                _runPursuitTrial();
+              });
+            } else {
               _runPursuitTrial();
-            });
+            }
           }
           return;
         }

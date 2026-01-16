@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/eye_tracking_data.dart';
-import '../services/data_export_service.dart';
-import '../services/service_locator.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../utils/logger.dart';
@@ -16,7 +14,6 @@ class EyeTrackingResultsScreen extends StatefulWidget {
 
 class _EyeTrackingResultsScreenState extends State<EyeTrackingResultsScreen> {
   late EyeTrackingSessionData _sessionData;
-  bool _isExporting = false;
 
   @override
   void didChangeDependencies() {
@@ -29,43 +26,6 @@ class _EyeTrackingResultsScreenState extends State<EyeTrackingResultsScreen> {
     } else {
       // Fallback if no data provided
       Navigator.pop(context);
-    }
-  }
-
-  Future<void> _exportData() async {
-    setState(() => _isExporting = true);
-
-    try {
-      final dataExportService = getIt<DataExportService>();
-      final file = await dataExportService.exportEyeTrackingSession(_sessionData);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Data exported to: ${file.path.split('/').last}'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-
-      AppLogger.logger.info('Eye tracking data exported successfully: ${file.path}');
-    } catch (e) {
-      AppLogger.logger.severe('Failed to export eye tracking data: $e');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to export data. Check logs for details.'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 4),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isExporting = false);
-      }
     }
   }
 
@@ -229,42 +189,7 @@ class _EyeTrackingResultsScreenState extends State<EyeTrackingResultsScreen> {
 
                     const SizedBox(height: 32),
 
-                    // Export Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isExporting ? null : _exportData,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          padding: const EdgeInsets.all(18),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: _isExporting
-                            ? const SizedBox(
-                                height: 24,
-                                width: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                ),
-                              )
-                            : Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  Icon(Icons.download, color: Colors.white, size: 24),
-                                  SizedBox(width: 12),
-                                  Text(
-                                    'Export Data to JSON',
-                                    style: TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
+                    // ...export button removed...
 
                     // Back to Home Button
                     SizedBox(

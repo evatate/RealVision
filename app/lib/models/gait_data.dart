@@ -327,8 +327,7 @@ class GaitFeatureExtraction {
 
     for (int i = 2; i < stepTimes.length; i += 2) {
       if (i + 1 < stepTimes.length) {
-        final ratio = stepTimes[i] / stepTimes[i + 1];
-        final symmetry = 1.0 - min(ratio, 1.0 / ratio) + 1.0; // 1.0 = perfect symmetry
+        final symmetry = min(stepTimes[i], stepTimes[i + 1]) / max(stepTimes[i], stepTimes[i + 1]);
         symmetrySum += symmetry;
         symmetryCount++;
       }

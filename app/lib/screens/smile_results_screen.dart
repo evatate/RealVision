@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/smile_data.dart';
-import '../services/data_export_service.dart';
 import '../utils/colors.dart';
-import '../utils/logger.dart';
 import '../models/test_progress.dart';
-import '../services/service_locator.dart';
 
 class SmileResultsScreen extends StatefulWidget {
   final SmileSessionData sessionData;
@@ -22,12 +19,10 @@ class SmileResultsScreen extends StatefulWidget {
 }
 
 class _SmileResultsScreenState extends State<SmileResultsScreen> {
-  late DataExportService _exportService;
 
   @override
   void initState() {
     super.initState();
-    _exportService = getIt<DataExportService>();
   }
 
   @override
@@ -158,19 +153,6 @@ class _SmileResultsScreenState extends State<SmileResultsScreen> {
       children: [
         Expanded(
           child: ElevatedButton.icon(
-            onPressed: _exportData,
-            icon: Icon(Icons.download),
-            label: Text('Export Data'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.all(16),
-            ),
-          ),
-        ),
-        SizedBox(width: 16),
-        Expanded(
-          child: ElevatedButton.icon(
             onPressed: _continueToNextTest,
             icon: Icon(Icons.arrow_forward),
             label: Text('Next Test'),
@@ -270,28 +252,6 @@ class _SmileResultsScreenState extends State<SmileResultsScreen> {
 
   int _calculateTotalFrames() {
     return widget.sessionData.trials.fold(0, (sum, trial) => sum + trial.frames.length);
-  }
-
-  void _exportData() async {
-    try {
-      final file = await _exportService.exportSmileSession(widget.sessionData);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Data exported to: ${file.path.split('/').last}'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-    } catch (e) {
-      AppLogger.logger.severe('Failed to export data: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to export data'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 
   void _continueToNextTest() {

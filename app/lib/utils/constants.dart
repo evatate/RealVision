@@ -11,7 +11,7 @@ class AppConstants {
   static const int gaitTestDuration = 120;
   
   static const int prosaccadePracticeTrials = 4;
-  static const int prosaccadeTestTrials = 40; 
+  static const int prosaccadeTestTrials = 30; // changed from 40 to 30 
   
   static const int smoothPursuitPracticeTrials = 2;
   static const int smoothPursuitTestTrials = 12;

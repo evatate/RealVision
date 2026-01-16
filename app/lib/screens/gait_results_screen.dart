@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/gait_data.dart';
-import '../services/data_export_service.dart';
-import '../services/service_locator.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
-import '../utils/logger.dart';
 import '../widgets/breadcrumb.dart';
 
 class GaitResultsScreen extends StatefulWidget {
@@ -20,42 +17,6 @@ class GaitResultsScreen extends StatefulWidget {
 }
 
 class _GaitResultsScreenState extends State<GaitResultsScreen> {
-  bool _isExporting = false;
-
-  Future<void> _exportData() async {
-    setState(() => _isExporting = true);
-
-    try {
-      final dataExportService = getIt<DataExportService>();
-      final file = await dataExportService.exportGaitSession(widget.sessionData);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Data exported to: ${file.path.split('/').last}'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-
-      AppLogger.logger.info('Gait data exported successfully: ${file.path}');
-    } catch (e) {
-      AppLogger.logger.severe('Failed to export gait data: $e');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to export data. Check logs for details.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isExporting = false);
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -168,35 +129,7 @@ class _GaitResultsScreenState extends State<GaitResultsScreen> {
 
                     const SizedBox(height: 24),
 
-                    // Export Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isExporting ? null : _exportData,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          padding: const EdgeInsets.all(16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: _isExporting
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                ),
-                              )
-                            : const Text(
-                                'Export Data to JSON',
-                                style: TextStyle(fontSize: 18, color: Colors.white),
-                              ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
+                    // ...export button removed...
 
                     // Back to Home Button
                     SizedBox(
@@ -273,9 +206,9 @@ class _GaitResultsScreenState extends State<GaitResultsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Flexible(
+              Expanded(
                 flex: 2,
                 child: Text(
                   label,
@@ -284,12 +217,12 @@ class _GaitResultsScreenState extends State<GaitResultsScreen> {
                     fontWeight: FontWeight.w500,
                     color: AppColors.textDark,
                   ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
+                  maxLines: 2,
+                  overflow: TextOverflow.visible,
                 ),
               ),
-              SizedBox(width: 8),
-              Flexible(
+              const SizedBox(width: 8),
+              Expanded(
                 flex: 3,
                 child: Text(
                   value,

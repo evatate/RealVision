@@ -116,7 +116,6 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
 
     await _audioService.speak(
       'Walking test complete. You took ${trialData.stepCount} steps. '
-      'Your gait quality score is ${features.gaitQualityScore.toStringAsFixed(2)}.'
     );
 
     AppLogger.logger.info('==== WALKING TEST RESULTS ====');

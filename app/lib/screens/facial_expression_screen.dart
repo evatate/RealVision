@@ -441,24 +441,27 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Camera preview with fixed height
-            Container(
-              height: cameraHeight,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _isFaceDetected ? AppColors.success : Colors.red,
-                  width: 4,
+            // Camera preview with fixed height and width
+            Center(
+              child: Container(
+                width: isLandscape ? null : screenWidth * 0.9,
+                height: cameraHeight,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _isFaceDetected ? AppColors.success : Colors.red,
+                    width: 4,
+                  ),
                 ),
+                child: _cameraInitialized && _cameraService.controller != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: CameraPreview(_cameraService.controller!),
+                      )
+                    : Center(
+                        child: CircularProgressIndicator(color: AppColors.primary),
+                      ),
               ),
-              child: _cameraInitialized && _cameraService.controller != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: CameraPreview(_cameraService.controller!),
-                    )
-                  : Center(
-                      child: CircularProgressIndicator(color: AppColors.primary),
-                    ),
             ),
             const SizedBox(height: 16),
             // Emoji
