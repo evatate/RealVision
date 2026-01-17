@@ -431,21 +431,28 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   Widget _buildTestScreen() {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
-    final isLandscape = screenWidth > screenHeight;
-    final cameraHeight = isLandscape
-        ? screenHeight * 0.6
-        : screenWidth * 0.9 / (_cameraService.controller?.value.aspectRatio ?? 1.0);
+    final aspectRatio = _cameraService.controller?.value.aspectRatio ?? 1.0;
+    double previewWidth, previewHeight;
+    if (screenWidth > screenHeight) {
+      // Landscape: fit height, calculate width
+      previewHeight = screenHeight * 0.6;
+      previewWidth = previewHeight * aspectRatio;
+    } else {
+      // Portrait: fit width, calculate height
+      previewWidth = screenWidth * 0.9;
+      previewHeight = previewWidth / aspectRatio;
+    }
     return Padding(
       padding: EdgeInsets.all(16),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Camera preview with fixed height and width
+            // Camera preview with fixed width and height (aspect ratio preserved)
             Center(
               child: Container(
-                width: isLandscape ? null : screenWidth * 0.9,
-                height: cameraHeight,
+                width: previewWidth,
+                height: previewHeight,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(

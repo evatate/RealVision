@@ -10,6 +10,17 @@ import 'cha_transcript_builder.dart';
 import '../utils/logger.dart';
 
 class AudioService {
+    /// Check microphone permission status
+    Future<bool> checkMicrophonePermission() async {
+      // Use speech_to_text for permission check
+      try {
+        final status = await _speechToText.hasPermission;
+        return status;
+      } catch (e) {
+        AppLogger.logger.info('Microphone permission check error: $e');
+        return false;
+      }
+    }
   bool _restartPending = false;
   void Function(String)? _statusHandler;
   final FlutterSoundRecorder _recorder = FlutterSoundRecorder();

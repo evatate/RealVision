@@ -424,9 +424,11 @@ Future<void> _startFixationTest() async {
       () async {
         try {
           if (!mounted) return;
-          
+
+          // Audio instruction for all tests
+          await _audioService.speak('Keep your head still and move only your eyes');
           await Future.delayed(const Duration(milliseconds: 500));
-          
+
           setState(() {
             _currentTask = EyeTrackingTask.fixation;
             _isPractice = true;
@@ -434,9 +436,9 @@ Future<void> _startFixationTest() async {
             _showTarget = true;
             _targetPosition = const Offset(0.5, 0.5);
           });
-          
+
           _startEyeTracking();
-          
+
           await _audioService.speak('Practice trial. Look at the red cross.');
           await _performDriftCorrection();
           _runFixationTrial();
@@ -581,18 +583,21 @@ Future<void> _startFixationTest() async {
       () async {
         try {
           if (!mounted) return;
-          
+
+          // Audio instruction for all tests
+          await _audioService.speak('Keep your head still and move only your eyes');
+
           _generateProsaccadeSequence();
-          
+
           setState(() {
             _currentTask = EyeTrackingTask.prosaccade;
             _isPractice = true;
             _trialIndex = 0;
             _completedTrials = 0;
           });
-          
+
           _startEyeTracking();
-          
+
           await _audioService.speak('Practice trials. Look at targets quickly.');
           await _performDriftCorrection();
           _runProsaccadeTrial();
@@ -797,15 +802,18 @@ Future<void> _startFixationTest() async {
       () async {
         try {
           if (!mounted) return;
-          
+
+          // Audio instruction for all tests
+          await _audioService.speak('Keep your head still and move only your eyes');
+
           setState(() {
             _currentTask = EyeTrackingTask.pursuit;
             _isPractice = true;
             _pursuitTrialNumber = 0;
           });
-          
+
           _startEyeTracking();
-          
+
           await _audioService.speak('Practice trials. Follow the red circle.');
           await _performDriftCorrection();
           _runPursuitTrial();

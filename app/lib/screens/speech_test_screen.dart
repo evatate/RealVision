@@ -62,6 +62,29 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
   }
 
   Future<void> _startTest() async {
+    // Check microphone permission before starting
+    final hasPermission = await _audioService.checkMicrophonePermission();
+    if (!hasPermission) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Microphone Permission Required'),
+            content: const Text(
+              'Microphone access is required to record your speech.\n\nPlease enable microphone permissions in your device settings and try again.'
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() {
       _isListening = true;
       _transcript = '';
