@@ -59,7 +59,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   bool _cameraInitialized = false;
   bool _showTarget = true;
   Timer? _eyeTrackingTimer;
-  bool _isFaceDetected = false;
+  bool _isFaceDetected = true;
   bool _isDriftCorrecting = false;
   List<int> _prosaccadeSequence = [];
   int _prosaccadeIndex = 0;
@@ -89,16 +89,72 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
 
   @override
   void dispose() {
-    _eyeTrackingService.setAssessmentActive(false);
-    _faceDetector.setAssessmentActive(false);
+    // Cancel all timers and stop all processes first
     _taskTimer?.cancel();
     _eyeTrackingTimer?.cancel();
+    _taskTimer = null;
+    _eyeTrackingTimer = null;
     _stopEyeTracking();
+    
+    // Reset services
+    _eyeTrackingService.setAssessmentActive(false);
+    _faceDetector.setAssessmentActive(false);
+    _eyeTrackingService.clearData();
+    
+    // Reset state variables without setState
+    _currentTask = EyeTrackingTask.none;
+    _trialIndex = 0;
+    _completedTrials = 0;
+    _fixationTrialNumber = 0;
+    _pursuitTrialNumber = 0;
+    _isPractice = false;
+    _targetPosition = null;
+    _showTarget = true;
+    _trials = [];
+    _prosaccadeSequence = [];
+    _prosaccadeIndex = 0;
+    _isDriftCorrecting = false;
+    _isProcessingFrame = false;
+    
+    // Dispose services
     _cameraService.dispose();
     _audioService.dispose();
     _eyeTrackingService.dispose();
     _faceDetector.dispose();
     super.dispose();
+  }
+
+  void _resetTestState() {
+    // Cancel all timers and stop all processes
+    _taskTimer?.cancel();
+    _eyeTrackingTimer?.cancel();
+    _taskTimer = null;
+    _eyeTrackingTimer = null;
+    _stopEyeTracking();
+    
+    // Reset all test state variables only if mounted
+    if (mounted) {
+      setState(() {
+        _currentTask = EyeTrackingTask.none;
+        _trialIndex = 0;
+        _completedTrials = 0;
+        _fixationTrialNumber = 0;
+        _pursuitTrialNumber = 0;
+        _isPractice = false;
+        _targetPosition = null;
+        _showTarget = true;
+        _trials = [];
+        _prosaccadeSequence = [];
+        _prosaccadeIndex = 0;
+        _isDriftCorrecting = false;
+        _isProcessingFrame = false;
+      });
+    }
+    
+    // Reset services
+    _eyeTrackingService.setAssessmentActive(false);
+    _faceDetector.setAssessmentActive(false);
+    _eyeTrackingService.clearData();
   }
 
   void _generateProsaccadeSequence() {
@@ -158,6 +214,10 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   }
 
 bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
+        if (trialData.isEmpty) {
+          AppLogger.logger.warning('Trial rejected: no data');
+          return false;
+        }
     if (_currentTask == EyeTrackingTask.fixation && trialData.length < 30) {
       AppLogger.logger.warning('Fixation trial rejected: only ${trialData.length} frames (need 30+)');
       return false;
@@ -275,13 +335,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
                     ),
                   );
                 } else {
-                  setState(() {
-                    _currentTask = EyeTrackingTask.none;
-                    _fixationTrialNumber = 0;
-                    _pursuitTrialNumber = 0;
-                    _trialIndex = 0;
-                    _completedTrials = 0;
-                  });
+                  _resetTestState();
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -302,13 +356,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
             child: OutlinedButton(
               onPressed: () {
                 Navigator.pop(context);
-                setState(() {
-                  _currentTask = EyeTrackingTask.none;
-                  _fixationTrialNumber = 0;
-                  _pursuitTrialNumber = 0;
-                  _trialIndex = 0;
-                  _completedTrials = 0;
-                });
+                _resetTestState();
               },
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: AppColors.primary, width: 2),
@@ -484,7 +532,7 @@ Future<void> _startFixationTest() async {
               setState(() => _isFaceDetected = faceDetected);
             }
 
-            if (faceDetected) {
+            if (faceDetected && _targetPosition != null) {
               await _eyeTrackingService.trackGaze(image, _targetPosition!, _screenSize, rotation);
             }
           } finally {
@@ -504,13 +552,16 @@ Future<void> _startFixationTest() async {
     
     if (_fixationTrialNumber >= maxTrials) {
       if (_isPractice) {
+        if (!mounted) return;
         setState(() {
           _isPractice = false;
           _fixationTrialNumber = 0;
         });
-        _audioService.speak('Practice complete. Starting test trials. Trial 1 of ${AppConstants.fixationTestTrials}');
+        _audioService.speak('Practice complete. Starting test trials. Trial 1 of \\${AppConstants.fixationTestTrials}');
         Future.delayed(const Duration(seconds: 2), () async {
+          if (!mounted) return;
           await _performDriftCorrection();
+          if (!mounted) return;
           _runFixationTrial();
         });
       } else {
@@ -523,9 +574,10 @@ Future<void> _startFixationTest() async {
     _eyeTrackingService.clearData();
     _eyeTrackingService.setTaskType('fixation');
     _eyeTrackingService.startTrial();
-    setState(() => _targetPosition = const Offset(0.5, 0.5));
+    if (mounted) setState(() => _targetPosition = const Offset(0.5, 0.5));
     
     _taskTimer = Timer(Duration(seconds: AppConstants.fixationDuration), () {
+      if (!mounted) return;
       final trialResult = _eyeTrackingService.completeTrial();
       final qualityOk = _checkTrialQuality(trialResult.frames);
 
@@ -534,7 +586,9 @@ Future<void> _startFixationTest() async {
         _fixationTrialNumber--;
         _eyeTrackingService.clearData();
         Future.delayed(const Duration(seconds: 2), () async {
+          if (!mounted) return;
           await _performDriftCorrection();
+          if (!mounted) return;
           _runFixationTrial();
         });
         return;
@@ -548,17 +602,20 @@ Future<void> _startFixationTest() async {
           qualityScore: trialResult.qualityScore,
         );
         _trials.add(updatedTrial);
-        AppLogger.logger.info('Added fixation trial ${_trials.length} with ${trialResult.frames.length} frames');
+        AppLogger.logger.info('Added fixation trial \\${_trials.length} with \\${trialResult.frames.length} frames');
       }
       
       if (_fixationTrialNumber < maxTrials) {
         final label = _isPractice ? 'practice' : 'test';
-        _audioService.speak('Next $label trial');
+        _audioService.speak('Next \\$label trial');
         Future.delayed(const Duration(seconds: 2), () async {
+          if (!mounted) return;
           await _performDriftCorrection();
+          if (!mounted) return;
           _runFixationTrial();
         });
       } else {
+        if (!mounted) return;
         _runFixationTrial();
       }
     });
@@ -837,7 +894,9 @@ Future<void> _startFixationTest() async {
         });
         _audioService.speak('Practice complete. Starting test trials.');
         Future.delayed(const Duration(seconds: 2), () async {
+          if (!mounted) return;
           await _performDriftCorrection();
+          if (!mounted) return;
           _runPursuitTrial();
         });
       } else {
@@ -913,7 +972,9 @@ Future<void> _startFixationTest() async {
             _audioService.speak('Trial quality low. Repeating trial.');
             _pursuitTrialNumber--;
             Future.delayed(const Duration(seconds: 2), () async {
+              if (!mounted) return;
               await _performDriftCorrection();
+              if (!mounted) return;
               _runPursuitTrial();
             });
           } else {
@@ -930,10 +991,13 @@ Future<void> _startFixationTest() async {
 
             if (_pursuitTrialNumber < maxTrials) {
               Future.delayed(const Duration(seconds: 1), () async {
+                if (!mounted) return;
                 await _performDriftCorrection();
+                if (!mounted) return;
                 _runPursuitTrial();
               });
             } else {
+              if (!mounted) return;
               _runPursuitTrial();
             }
           }
@@ -1114,14 +1178,7 @@ Future<void> _startFixationTest() async {
           left: 16,
           child: GestureDetector(
             onTap: () {
-              _stopEyeTracking();
-              setState(() {
-                _currentTask = EyeTrackingTask.none;
-                _fixationTrialNumber = 0;
-                _pursuitTrialNumber = 0;
-                _trialIndex = 0;
-                _completedTrials = 0;
-              });
+              Navigator.pop(context);
             },
             child: Container(
               padding: const EdgeInsets.all(12),
@@ -1139,7 +1196,7 @@ Future<void> _startFixationTest() async {
           ),
         ),
         
-        if (!_isFaceDetected && !_isDriftCorrecting)
+        if (!_isFaceDetected && !_isDriftCorrecting && _currentTask != EyeTrackingTask.none)
           Positioned(
             top: 100,
             left: 0,
