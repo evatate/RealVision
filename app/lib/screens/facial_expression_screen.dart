@@ -354,7 +354,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
       MaterialPageRoute(
         builder: (context) => SmileResultsScreen(
           sessionData: sessionData,
-          exportPath: null, // Will be set by export service
+          exportPath: null,
         ),
       ),
     );
@@ -429,46 +429,45 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   }
 
   Widget _buildTestScreen() {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
     final aspectRatio = _cameraService.controller?.value.aspectRatio ?? 1.0;
-    double previewWidth, previewHeight;
-    if (screenWidth > screenHeight) {
-      // Landscape: fit height, calculate width
-      previewHeight = screenHeight * 0.6;
-      previewWidth = previewHeight * aspectRatio;
-    } else {
-      // Portrait: fit width, calculate height
-      previewWidth = screenWidth * 0.9;
-      previewHeight = previewWidth / aspectRatio;
-    }
     return Padding(
       padding: EdgeInsets.all(16),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Camera preview with fixed width and height (aspect ratio preserved)
-            Center(
-              child: Container(
-                width: previewWidth,
-                height: previewHeight,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _isFaceDetected ? AppColors.success : Colors.red,
-                    width: 4,
-                  ),
-                ),
-                child: _cameraInitialized && _cameraService.controller != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: CameraPreview(_cameraService.controller!),
-                      )
-                    : Center(
-                        child: CircularProgressIndicator(color: AppColors.primary),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final maxPreviewWidth = constraints.maxWidth;
+                final maxPreviewHeight = MediaQuery.of(context).size.height * 0.7;
+                double previewWidth = maxPreviewWidth;
+                double previewHeight = previewWidth / aspectRatio;
+                if (previewHeight > maxPreviewHeight) {
+                  previewHeight = maxPreviewHeight;
+                  previewWidth = previewHeight * aspectRatio;
+                }
+                return Center(
+                  child: Container(
+                    width: previewWidth,
+                    height: previewHeight,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _isFaceDetected ? AppColors.success : Colors.red,
+                        width: 4,
                       ),
-              ),
+                    ),
+                    child: _cameraInitialized && _cameraService.controller != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: CameraPreview(_cameraService.controller!),
+                          )
+                        : Center(
+                            child: CircularProgressIndicator(color: AppColors.primary),
+                          ),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 16),
             // Emoji

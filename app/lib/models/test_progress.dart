@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../services/aws_storage_service.dart';
+import '../services/progress_storage_service.dart';
 
 class TestProgress with ChangeNotifier {
   // Serialization
@@ -10,7 +11,6 @@ class TestProgress with ChangeNotifier {
     'pursuitCompleted': _pursuitCompleted,
     'smileCompleted': _smileCompleted,
     'gaitCompleted': _gaitCompleted,
-    // You can add more fields as needed
   };
 
   static TestProgress fromMap(Map<String, dynamic> map) {
@@ -21,7 +21,6 @@ class TestProgress with ChangeNotifier {
     progress._pursuitCompleted = map['pursuitCompleted'] ?? false;
     progress._smileCompleted = map['smileCompleted'] ?? false;
     progress._gaitCompleted = map['gaitCompleted'] ?? false;
-    // You can add more fields as needed
     return progress;
   }
   bool _speechCompleted = false;
@@ -95,5 +94,26 @@ class TestProgress with ChangeNotifier {
     _gaitCompleted = false;
     _speechAnalysis = null;
     notifyListeners();
+  }
+}
+
+/// TestProgress that automatically persists to shared preferences on every change
+class PersistentTestProgress extends TestProgress {
+  PersistentTestProgress([TestProgress? initial]) {
+    if (initial != null) {
+      _speechCompleted = initial.speechCompleted;
+      _fixationCompleted = initial.fixationCompleted;
+      _prosaccadeCompleted = initial.prosaccadeCompleted;
+      _pursuitCompleted = initial.pursuitCompleted;
+      _smileCompleted = initial.smileCompleted;
+      _gaitCompleted = initial.gaitCompleted;
+      _speechAnalysis = initial.speechAnalysis;
+    }
+  }
+
+  @override
+  void notifyListeners() {
+    super.notifyListeners();
+    ProgressStorageService.saveProgress(this);
   }
 }

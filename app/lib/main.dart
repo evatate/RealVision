@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'models/test_progress.dart';
+import 'services/progress_storage_service.dart';
 import 'utils/colors.dart';
 import '../services/service_locator.dart';
 import 'screens/splash_screen.dart';
@@ -20,21 +21,20 @@ void main() async {
   final awsAuth = getIt<AWSAuthService>();
   await awsAuth.initialize();
 
-  runApp(
-    ChangeNotifierProvider(
-      create: (context) => TestProgress(),
-      child: const RealVisionApp(),
-    ),
-  );
+  // Load progress from shared preferences
+  final loadedProgress = await ProgressStorageService.loadProgress();
+
+  runApp(RealVisionApp(progress: PersistentTestProgress(loadedProgress)));
 }
 
 class RealVisionApp extends StatelessWidget {
-  const RealVisionApp({super.key});
+  final PersistentTestProgress progress;
+  const RealVisionApp({super.key, required this.progress});
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => TestProgress(),
+    return ChangeNotifierProvider<TestProgress>.value(
+      value: progress,
       child: MaterialApp(
         title: 'RealVision',
         debugShowCheckedModeBanner: false,
