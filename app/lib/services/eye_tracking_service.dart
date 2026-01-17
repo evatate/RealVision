@@ -380,8 +380,8 @@ class EyeTrackingService {
     expectedFramesForPlatform = expectedFramesForPlatform.clamp(10.0, 120.0); // avoid division by zero/negative
     final quantityScore = math.min(frameCount / expectedFramesForPlatform, 1.0).clamp(0.0, 1.0);
 
-    // Accuracy score: lower distance is better
-    final accuracyScore = math.max(0.0, 1.0 - avgDistance * 1.5);
+    // Accuracy score: lower distance is better, but 0 distance means no valid data
+    final accuracyScore = avgDistance > 0 ? math.max(0.0, 1.0 - avgDistance * 1.5) : 0.0;
 
     // Consistency score: penalize large gaps
     final gapPenalty = (largeGaps / frameCount).clamp(0.0, 0.5);
