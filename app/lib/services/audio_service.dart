@@ -39,13 +39,13 @@ class AudioService {
   DateTime? _sessionStartTime;
   String _currentPartialTranscript = '';
 
-  // Platform-specific: Use WAV recording on iOS only
-  bool get _shouldRecordWAV => Platform.isIOS;
+  // Enable WAV recording on both iOS and Android
+  bool get _shouldRecordWAV => true;
 
   /// Start WAV audio recording and return the file path (iOS only)
   Future<String?> startRecording() async {
     if (!_shouldRecordWAV) {
-      AppLogger.logger.info('[SpeechTest] WAV recording skipped on Android (using speech-to-text only)');
+      AppLogger.logger.info('[SpeechTest] WAV recording disabled');
       return null;
     }
 
@@ -79,7 +79,7 @@ class AudioService {
   /// Stop WAV audio recording and return the file path (iOS only)
   Future<String?> stopRecording() async {
     if (!_shouldRecordWAV) {
-      AppLogger.logger.info('[SpeechTest] WAV recording skipped on Android');
+      AppLogger.logger.info('[SpeechTest] WAV recording disabled');
       return null;
     }
 

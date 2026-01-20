@@ -56,6 +56,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   bool _isPractice = false;
   Offset? _targetPosition;
   Timer? _taskTimer;
+  Timer? _countdownTimer;
   bool _cameraInitialized = false;
   bool _showTarget = true;
   Timer? _eyeTrackingTimer;
@@ -91,8 +92,10 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   void dispose() {
     // Cancel all timers and stop all processes first
     _taskTimer?.cancel();
+    _countdownTimer?.cancel();
     _eyeTrackingTimer?.cancel();
     _taskTimer = null;
+    _countdownTimer = null;
     _eyeTrackingTimer = null;
     _stopEyeTracking();
     
@@ -127,8 +130,10 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   void _resetTestState() {
     // Cancel all timers and stop all processes
     _taskTimer?.cancel();
+    _countdownTimer?.cancel();
     _eyeTrackingTimer?.cancel();
     _taskTimer = null;
+    _countdownTimer = null;
     _eyeTrackingTimer = null;
     _stopEyeTracking();
     
@@ -532,9 +537,12 @@ Future<void> _startFixationTest() async {
               setState(() => _isFaceDetected = faceDetected);
             }
 
-            if (faceDetected && _targetPosition != null) {
+            if (faceDetected && _targetPosition != null && mounted) {
               await _eyeTrackingService.trackGaze(image, _targetPosition!, _screenSize, rotation);
             }
+          } catch (e) {
+            AppLogger.logger.warning('Error in frame processing: $e');
+            // Continue processing despite errors
           } finally {
             _isProcessingFrame = false;
           }
@@ -542,6 +550,10 @@ Future<void> _startFixationTest() async {
       }
     } catch (e) {
       AppLogger.logger.warning('Error starting camera stream: $e');
+      // Reset state if camera fails
+      if (mounted) {
+        _resetTestState();
+      }
     }
   }
 
@@ -576,47 +588,101 @@ Future<void> _startFixationTest() async {
     _eyeTrackingService.startTrial();
     if (mounted) setState(() => _targetPosition = const Offset(0.5, 0.5));
     
-    _taskTimer = Timer(Duration(seconds: AppConstants.fixationDuration), () {
-      if (!mounted) return;
-      final trialResult = _eyeTrackingService.completeTrial();
-      final qualityOk = _checkTrialQuality(trialResult.frames);
-
-      if (!qualityOk && !_isPractice) {
-        _audioService.speak('Trial quality low. Repeating trial.');
-        _fixationTrialNumber--;
-        _eyeTrackingService.clearData();
-        Future.delayed(const Duration(seconds: 2), () async {
-          if (!mounted) return;
-          await _performDriftCorrection();
-          if (!mounted) return;
-          _runFixationTrial();
-        });
+    // Start countdown audio for each second
+    int remainingSeconds = AppConstants.fixationDuration;
+    
+    try {
+      _audioService.speak('$remainingSeconds');
+    } catch (e) {
+      AppLogger.logger.warning('Error speaking countdown start: $e');
+    }
+    
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (countdownTimer) {
+      if (!mounted || _currentTask != EyeTrackingTask.fixation) {
+        countdownTimer.cancel();
         return;
       }
-
-      if (qualityOk && !_isPractice) {
-        final updatedTrial = EyeTrackingTrialData(
-          trialNumber: _trials.length + 1,
-          taskType: 'fixation',
-          frames: trialResult.frames,
-          qualityScore: trialResult.qualityScore,
-        );
-        _trials.add(updatedTrial);
-        AppLogger.logger.info('Added fixation trial \\${_trials.length} with \\${trialResult.frames.length} frames');
-      }
       
-      if (_fixationTrialNumber < maxTrials) {
-        final label = _isPractice ? 'practice' : 'test';
-        _audioService.speak('Next \\$label trial');
-        Future.delayed(const Duration(seconds: 2), () async {
-          if (!mounted) return;
-          await _performDriftCorrection();
+      remainingSeconds--;
+      
+      if (remainingSeconds > 0) {
+        try {
+          _audioService.speak('$remainingSeconds');
+        } catch (e) {
+          AppLogger.logger.warning('Error speaking countdown: $e');
+        }
+      } else {
+        // Trial complete
+        countdownTimer.cancel();
+        _countdownTimer = null;
+        
+        if (!mounted) return;
+        
+        EyeTrackingTrialData? trialResult;
+        bool qualityOk = false;
+        
+        try {
+          trialResult = _eyeTrackingService.completeTrial();
+          qualityOk = _checkTrialQuality(trialResult.frames);
+        } catch (e) {
+          AppLogger.logger.severe('Error completing trial: $e');
+          // Treat as failed trial and retry
+          qualityOk = false;
+        }
+
+        if ((!qualityOk || trialResult == null) && !_isPractice) {
+          try {
+            _audioService.speak('Trial quality low. Repeating trial.');
+          } catch (e) {
+            AppLogger.logger.warning('Error speaking retry message: $e');
+          }
+          _fixationTrialNumber--;
+          _eyeTrackingService.clearData();
+          Future.delayed(const Duration(seconds: 2), () async {
+            if (!mounted) return;
+            try {
+              await _performDriftCorrection();
+            } catch (e) {
+              AppLogger.logger.warning('Error in drift correction: $e');
+            }
+            if (!mounted) return;
+            _runFixationTrial();
+          });
+          return;
+        }
+
+        if (qualityOk && !_isPractice && trialResult != null) {
+          final updatedTrial = EyeTrackingTrialData(
+            trialNumber: _trials.length + 1,
+            taskType: 'fixation',
+            frames: trialResult.frames,
+            qualityScore: trialResult.qualityScore,
+          );
+          _trials.add(updatedTrial);
+          AppLogger.logger.info('Added fixation trial \\${_trials.length} with \\${trialResult.frames.length} frames');
+        }
+        
+        if (_fixationTrialNumber < maxTrials) {
+          final label = _isPractice ? 'practice' : 'test';
+          try {
+            _audioService.speak('Next \\$label trial');
+          } catch (e) {
+            AppLogger.logger.warning('Error speaking next trial: $e');
+          }
+          Future.delayed(const Duration(seconds: 2), () async {
+            if (!mounted) return;
+            try {
+              await _performDriftCorrection();
+            } catch (e) {
+              AppLogger.logger.warning('Error in drift correction: $e');
+            }
+            if (!mounted) return;
+            _runFixationTrial();
+          });
+        } else {
           if (!mounted) return;
           _runFixationTrial();
-        });
-      } else {
-        if (!mounted) return;
-        _runFixationTrial();
+        }
       }
     });
   }
@@ -624,6 +690,31 @@ Future<void> _startFixationTest() async {
   void _completeFixationTest() {
     _stopEyeTracking();
     _eyeTrackingService.clearData();
+
+    // Export fixation data
+    final sessionData = EyeTrackingSessionData(
+      participantId: _participantId!,
+      sessionId: 'eye_tracking_fixation_${DateTime.now().millisecondsSinceEpoch}',
+      timestamp: DateTime.now(),
+      trials: _trials,
+      features: EyeTrackingFeatureExtraction.extractSessionFeatures(
+        EyeTrackingSessionData(
+          participantId: _participantId!,
+          sessionId: 'temp',
+          timestamp: DateTime.now(),
+          trials: _trials,
+          features: EyeTrackingFeatureExtraction.getEmptyFeatures(),
+        ),
+      ),
+    );
+
+    final dataExportService = getIt<DataExportService>();
+    try {
+      dataExportService.exportEyeTrackingSession(sessionData);
+      AppLogger.logger.info('Fixation test data exported successfully');
+    } catch (e) {
+      AppLogger.logger.warning('Failed to export fixation test data: $e');
+    }
 
     Provider.of<TestProgress>(context, listen: false).markFixationCompleted();
 
@@ -706,7 +797,7 @@ Future<void> _startFixationTest() async {
 
       final sessionData = EyeTrackingSessionData(
         participantId: _participantId!,
-        sessionId: 'eye_tracking_${DateTime.now().millisecondsSinceEpoch}',
+        sessionId: 'eye_tracking_prosaccade_${DateTime.now().millisecondsSinceEpoch}',
         timestamp: DateTime.now(),
         trials: _trials,
         features: EyeTrackingFeatureExtraction.extractSessionFeatures(
@@ -905,7 +996,7 @@ Future<void> _startFixationTest() async {
 
         final sessionData = EyeTrackingSessionData(
           participantId: _participantId!,
-          sessionId: 'eye_tracking_${DateTime.now().millisecondsSinceEpoch}',
+          sessionId: 'eye_tracking_complete_${DateTime.now().millisecondsSinceEpoch}',
           timestamp: DateTime.now(),
           trials: _trials,
           features: EyeTrackingFeatureExtraction.extractSessionFeatures(
@@ -924,9 +1015,9 @@ Future<void> _startFixationTest() async {
         final dataExportService = getIt<DataExportService>();
         try {
           dataExportService.exportEyeTrackingSession(sessionData);
-          AppLogger.logger.info('Eye tracking session data exported successfully');
+          AppLogger.logger.info('Complete eye tracking session data exported successfully');
         } catch (e) {
-          AppLogger.logger.warning('Failed to export eye tracking session data: $e');
+          AppLogger.logger.warning('Failed to export complete eye tracking session data: $e');
         }
 
         _showTestCompletionDialog('All Eye Tracking Tests Complete!', 'all');
@@ -1072,6 +1163,7 @@ Future<void> _startFixationTest() async {
             'Fixation Stability Test', 
             _startFixationTest,
             progress.fixationCompleted,
+            true, // Always enabled (first test)
           ),
           SizedBox(height: AppConstants.buttonSpacing),
           
@@ -1079,6 +1171,7 @@ Future<void> _startFixationTest() async {
             'Pro-saccade Test', 
             _startProsaccadeTest,
             progress.prosaccadeCompleted,
+            progress.fixationCompleted, // Only enabled after fixation
           ),
           SizedBox(height: AppConstants.buttonSpacing),
           
@@ -1086,26 +1179,35 @@ Future<void> _startFixationTest() async {
             'Smooth Pursuit Test', 
             _startSmoothPursuitTest,
             progress.pursuitCompleted,
+            progress.prosaccadeCompleted, // Only enabled after prosaccade
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTaskButtonWithStatus(String title, VoidCallback onPressed, bool completed) {
+  Widget _buildTaskButtonWithStatus(String title, VoidCallback onPressed, bool completed, bool enabled) {
     return Container(
       decoration: BoxDecoration(
-        color: completed ? Colors.green[50] : Colors.white,
+        color: completed 
+            ? Colors.green[50] 
+            : enabled 
+                ? Colors.white 
+                : Colors.grey[100],
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: completed ? Colors.green[400]! : AppColors.border,
+          color: completed 
+              ? Colors.green[400]! 
+              : enabled 
+                  ? AppColors.border 
+                  : Colors.grey[300]!,
           width: 2,
         ),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onPressed,
+          onTap: enabled ? onPressed : null,
           borderRadius: BorderRadius.circular(10),
           child: Padding(
             padding: EdgeInsets.all(AppConstants.buttonPadding),
@@ -1117,7 +1219,9 @@ Future<void> _startFixationTest() async {
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textDark,
+                      color: enabled 
+                          ? AppColors.textDark 
+                          : Colors.grey[500],
                     ),
                   ),
                 ),
@@ -1127,10 +1231,16 @@ Future<void> _startFixationTest() async {
                     color: Colors.green[700],
                     size: 32,
                   )
-                else
+                else if (enabled)
                   Icon(
                     Icons.arrow_forward_ios,
                     color: AppColors.textMedium,
+                    size: 24,
+                  )
+                else
+                  Icon(
+                    Icons.lock,
+                    color: Colors.grey[500],
                     size: 24,
                   ),
               ],

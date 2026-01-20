@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
-import 'package:path_provider/path_provider.dart';
 import '../models/test_progress.dart';
 import '../services/audio_service.dart';
 import '../services/aws_storage_service.dart';
 import '../services/service_locator.dart';
-import '../services/cha_transcript_builder.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../utils/logger.dart';
@@ -24,7 +22,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
   final AudioService _audioService = AudioService();
   final AWSStorageService _awsStorage = getIt<AWSStorageService>();
   bool _isListening = false;
-  String _transcript = '';
   bool _initialized = false;
   bool _hasSpoken = false;
 
@@ -87,7 +84,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
 
     setState(() {
       _isListening = true;
-      _transcript = '';
       _testStartTime = DateTime.now();
       _canFinish = false;
       _elapsedSeconds = 0;
@@ -110,36 +106,12 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     });
 
     // WAV recording start
-    _audioService.resetSegments();
     String? wavPath;
     try {
       wavPath = await _audioService.startRecording();
       AppLogger.logger.info('WAV recording started. File path: $wavPath');
     } catch (e) {
       AppLogger.logger.severe('Error starting WAV recording: $e');
-    }
-
-    try {
-      await _audioService.startListening(
-        onResult: (text) {
-          if (mounted) {
-            setState(() => _transcript = text);
-          }
-        },
-        onError: (error) {
-          AppLogger.logger.severe('Speech recognition error: $error');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Microphone error. Check permissions.'),
-                duration: const Duration(seconds: 3),
-              ),
-            );
-          }
-        },
-      );
-    } catch (e) {
-      AppLogger.logger.severe('Error starting speech test: $e');
       if (mounted) {
         setState(() => _isListening = false);
         _elapsedTimeTimer?.cancel();
@@ -187,22 +159,16 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       AppLogger.logger.severe('Error stopping WAV recording: $e');
     }
 
-    await _audioService.stopListening();
-
     if (mounted) {
       setState(() => _isListening = false);
     }
 
-    final finalTranscript = _transcript.isNotEmpty
-        ? _transcript
-        : _audioService.getAccumulatedTranscript();
-
-    if (finalTranscript.trim().isEmpty || finalTranscript.trim().length < 10) {
+    // Validate that we have a recording file
+    if (wavPath == null || !File(wavPath).existsSync()) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-                'No speech detected or recording too short. Please try again and speak clearly into the microphone.'),
+            content: Text('Recording failed. Please try again.'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 5),
           ),
@@ -211,54 +177,8 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       return;
     }
 
-    // Generate and upload CHA transcript
-    try {
-      final segments = _audioService.getSegments();
-      AppLogger.logger.info('Segments length: ${segments.length}');
-
-      // If no segments from audio service, create one from the final transcript
-      final List<SpeechSegment> chaSegments = segments.isEmpty
-          ? [
-              SpeechSegment(
-                text: finalTranscript,
-                start: Duration.zero,
-                end: testDuration,
-              )
-            ]
-          : segments;
-
-      final cha = ChaTranscriptBuilder.build(
-        segments: chaSegments,
-        totalDuration: testDuration,
-      );
-
-      if (segments.isEmpty) {
-        AppLogger.logger
-            .warning('No segments from audio service, using final transcript.');
-      }
-
-      // Create temporary CHA file
-      final dir = await getApplicationDocumentsDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final chaFilePath = '${dir.path}/speech_$timestamp.cha';
-      final chaFile = File(chaFilePath);
-      await chaFile.writeAsString(cha);
-      AppLogger.logger.info('CHA file created: $chaFilePath');
-
-      // Upload using the same method as audio files, just pass the file path
-      final chaS3Key = await _awsStorage.uploadFile(chaFilePath, 'transcript');
-
-      if (chaS3Key != null) {
-        AppLogger.logger.info('CHA uploaded to S3: $chaS3Key');
-      } else {
-        AppLogger.logger.severe('CHA upload to S3 failed');
-      }
-    } catch (e) {
-      AppLogger.logger.severe('CHA generation/upload failed: $e');
-    }
-
-    // WAV upload (iOS only)
-    if (wavPath != null && File(wavPath).existsSync()) {
+    // WAV upload (both iOS and Android)
+    if (File(wavPath).existsSync()) {
       try {
         AppLogger.logger.info('Uploading WAV file to S3: $wavPath');
         final s3Key = await _awsStorage.uploadAudioFile(wavPath);
@@ -271,8 +191,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
         AppLogger.logger.severe('WAV upload to S3 failed: $e');
       }
     } else {
-      AppLogger.logger.info(
-          'WAV recording not available (Android uses speech-to-text only)');
+      AppLogger.logger.warning('WAV recording not available or file not found');
     }
 
     if (mounted) {
@@ -281,9 +200,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
 
     await _audioService.speak('Thank you. Speech test complete.');
 
-    AppLogger.logger.info('Speech transcript: $finalTranscript');
-    AppLogger.logger
-        .info('Transcript length: ${finalTranscript.split(' ').length} words');
+    AppLogger.logger.info('Speech recording complete. Duration: ${testDuration.inSeconds} seconds');
 
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) Navigator.pop(context);
@@ -294,7 +211,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
   void dispose() {
     _elapsedTimeTimer?.cancel();
     _minimumTimeTimer?.cancel();
-    _audioService.stopListening();
+    _audioService.stopRecording();
     super.dispose();
     // Dispose audio service after a delay to let final TTS complete
     Future.delayed(const Duration(seconds: 3), () {
@@ -410,38 +327,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                                 color:
                                     _canFinish ? Colors.green : Colors.orange,
                                 fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: 16),
-
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AppColors.cardBackground,
-                              borderRadius: BorderRadius.circular(12),
-                              border:
-                                  Border.all(color: AppColors.border, width: 2),
-                            ),
-                            constraints: const BoxConstraints(
-                              minHeight: 100,
-                              maxHeight: 200,
-                            ),
-                            child: SingleChildScrollView(
-                              child: Text(
-                                _transcript.isEmpty
-                                    ? 'Your speech will appear here...'
-                                    : _transcript,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: _transcript.isEmpty
-                                      ? AppColors.textMedium
-                                      : AppColors.textDark,
-                                  fontStyle: _transcript.isEmpty
-                                      ? FontStyle.italic
-                                      : FontStyle.normal,
-                                ),
                               ),
                             ),
                           ),
