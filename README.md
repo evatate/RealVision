@@ -1,6 +1,6 @@
 # RealVision: Multimodal Machine Learning for ADRD Screening
 
-RealVision is a research-driven platform for early detection and monitoring of Alzheimer’s Disease and Related Dementias (ADRD). The system combines four independent behavioral and neurological indicators known to correlate with cognitive decline:
+RealVision is a fully deployed, cross-platform (iOS and Android) mobile application for multimodal screening of **Alzheimer’s Disease and Related Dementias (ADRD)**. The system integrates four behavioral and neurological indicators that have been independently validated in prior machine learning and clinical research:
 
 1. Speech and prosodic impairments
 2. Abnormal eye movement characteristics
@@ -8,6 +8,8 @@ RealVision is a research-driven platform for early detection and monitoring of A
 4. Gait instability and changes in walking biomechanics
 
 The project consists of a complete pipeline including data acquisition, multimodal feature extraction, supervised machine learning architectures, and deployment to a patient-facing mobile application.
+
+RealVision is designed as a **screening and research tool**, not a diagnostic system. The platform is currently in **beta testing** and is being prepared for **clinical validation studies**.
 
 ---
 
@@ -20,61 +22,87 @@ Clinical diagnosis of ADRD typically occurs years after symptom onset due to:
 
 Prior work has shown that individual modalities can identify ADRD characteristics with strong statistical significance:
 - Speech analysis approaches ~83% classification accuracy on standardized datasets
-- Eye movement metrics achieve up to ~95% discrimination in early-onset studies
-- Gait changes are detectable years before cognitive symptoms are reported
-- Facial muscle activation (e.g., smiling) differs significantly between ADRD/MCI and healthy controls
+- Eye movement metrics achieve up to ~95% discrimination in controlled oculomotor tasks
+- Gait speed and variability decline years before clinical diagnosis  
+- Facial expressiveness, including smile dynamics, differs significantly between ADRD/MCI and healthy controls  
 
-RealVision unifies these signals into a single multimodal screening framework intended for use in non-clinical environments.
+RealVision unifies these signals into a **single, patient-facing smartphone application**, enabling scalable, low-burden cognitive screening outside traditional clinical environments.
 
 ---
 
 ## System Overview
 
-The RealVision pipeline includes the following components:
+RealVision follows a **feature-based multimodal ML architecture**, prioritizing interpretability and clinical generalizability over end-to-end deep learning.
 
-| Component | Input | Feature Extraction | Output |
-|----------|------|------------------|--------|
-| Speech Processing | Audio + transcript | Linguistic, acoustic, semantic embeddings | AD vs control predictions, MMSE regression |
-| Eye Tracking | Camera video | Fixation stability, saccade metrics, pursuit error | Oculomotor impairment score |
-| Facial Analysis | Camera video | Face landmark motion, smile index | Facial expressiveness score |
-| Gait Analysis | Mobile sensors | Step asymmetry, stride variability, speed | Gait instability score |
+| Modality | Input | Feature Extraction | Output |
+|--------|------|------------------|--------|
+| **Speech** | Audio + transcript | Acoustic, linguistic, semantic features | Cognitive risk score + MMSE regression |
+| **Eye Tracking** | Front camera video | Fixation stability, saccade latency, pursuit error | Oculomotor impairment score |
+| **Facial Expressions** | Front camera video | Smile index dynamics, facial variability | Facial expressiveness score |
+| **Gait** | HealthKit / Health Connect | Speed, cadence, variability | Gait unsteadiness score |
 
-The final product is an ensemble model integrating scores from all modalities to estimate ADRD likelihood.
+Each modality produces an **interpretable subscore**. These outputs are designed for later fusion into a multimodal model during clinical evaluation.
 
 ---
 
-## Current Progress
+## Mobile Application
 
-### Speech Pipeline
-Completed:
-- Data ingestion from ADReSS-2020 dataset
-- openSMILE eGeMAPS v2 acoustic feature extraction
-- Linguistic feature engineering from CHAT transcripts
-- Participant metadata integration into unified ML table
+**Fully functional on both iOS and Android**
 
-In Progress:
-- DistilBERT-based semantic feature extraction and fusion
-- MMSE regression and classifier improvement
-- Cross-validation and generalizability testing
+The mobile app implements:
+- A guided speech recording task
+- Three eye-tracking tasks (fixation, pro-saccade, smooth pursuit)  
+- A standardized smile test (two 15-second trials)  
+- A 2-minute walking test using device health APIs  
 
-### Mobile Application
-Completed:
-- Fully functional Android prototype with:
-  - Speech recording workflow
-  - Three eye-tracking tasks
-  - Smile test recording pipeline
-  - Gait/step capture using Health Connect
+The UI is intentionally simple and voice-guided to support older adults and first-time users, consistent with prior clinical tablet-based studies.
 
-In Progress:
-- iOS feature testing (HealthKit and camera calibration)
-- Integration of TensorFlow Lite models for on-device inference
-- Final scoring and results presentation UI
+---
 
-### Remaining Modalities (Models)
-In Development:
-- Eye-tracking signal processing
-- Facial expression dynamics modeling
-- Gait biomechanics feature processing
+## Cloud Infrastructure & Security
+
+RealVision is deployed entirely on **Amazon Web Services (AWS)**:
+
+- **Private S3 buckets** for encrypted storage of video, audio, and sensor data  
+- **EC2 instances** for model inference and batch processing  
+- **API Gateway + Lambda** for secure request handling  
+- Structured data stored in managed relational databases  
+
+All data handling follows **HIPAA-compliant architecture patterns**, including:
+- Encrypted data at rest and in transit  
+- Restricted IAM access policies
+- Separation of identifiers from behavioral data  
+
+This deployment mirrors cloud-based architectures used in prior validated mobile cognitive assessment systems.
+
+---
+
+## Current Project Status
+
+### Speech Pipeline (Completed)
+- ADReSS-2020 feature extraction
+- Acoustic (eGeMAPS), linguistic, and pause-based features
+- Random Forest classifier trained
+- ~84% cross-validated accuracy
+
+### Facial Expression Pipeline (Completed)
+- Frame-level smile index (0–100)
+- Time-series feature extraction from standardized smile tests
+- Smile strength, variability, reaction time, and contrast metrics
+
+### Eye Tracking Pipeline (Completed)
+- Smartphone-based eye landmark tracking
+- Relative oculomotor features (stability, latency, pursuit error)
+- Task design aligned with prior eye-movement studies
+
+### Gait Pipeline (Completed)
+- Walking speed, cadence, and variability from HealthKit / Health Connect
+- Session-level gait unsteadiness metrics
+
+### Current Work
+- Bug fixes identified during beta testing
+- Stability and performance improvements
+- Final preparation for clinical trials
 
 ---
 
@@ -82,18 +110,27 @@ In Development:
 
 | Layer | Tools and Frameworks |
 |------|---------------------|
+| Mobile App | Flutter (iOS & Android) |
 | ML Model Development | Python, PyTorch, Transformers, scikit-learn |
 | Speech Feature Extraction | openSMILE, librosa, NLP preprocessing |
-| Mobile Sensor Data Capture | HealthKit (iOS), Health Connect (Android) |
-| Computer Vision | TensorFlow Lite, MediaPipe (planned) |
-| App Development | Flutter SDK (cross-platform), Dart |
+| Computer Vision | MediaPipe, TensorFlow Lite |
+| Cloud | AWS (S3, EC2, Lambda, API Gateway) |
+| Security | HIPAA-aligned AWS architecture |
 
 ---
 
-## Research Deliverables
+## Research & Clinical Path Forward
 
-1. Full multimodal dataset aligned to clinical cognition metadata
-2. ML models for each modality + final ensemble classifier
-3. On-device inference pipeline optimized for mobile hardware
-4. Performance benchmarks against known ADRD datasets
-5. Publication of methodology and findings
+Planned next steps:
+1. Completion of beta testing and bug fixes  
+2. Deployment in controlled clinical studies  
+3. Supervised training of multimodal ADRD classifiers  
+4. Evaluation using AUC, sensitivity, and specificity  
+5. Peer-reviewed publication of results  
+
+---
+
+## Disclaimer
+
+RealVision is a **research and screening tool only**.  
+It does not provide medical diagnoses and should not be used as a standalone clinical decision system.
