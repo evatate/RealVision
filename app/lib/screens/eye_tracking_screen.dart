@@ -148,7 +148,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
         _isPractice = false;
         _targetPosition = null;
         _showTarget = true;
-        _trials = [];
         _prosaccadeSequence = [];
         _prosaccadeIndex = 0;
         _isDriftCorrecting = false;
@@ -468,7 +467,10 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
   }
 Future<void> _startFixationTest() async {
     _participantId ??= 'participant_${DateTime.now().millisecondsSinceEpoch}';
-    _trials = [];
+    // Only clear if this is a fresh start (no trials yet)
+    if (_trials.isEmpty) {
+      _trials = [];
+    }
 
     _showInstructions(
       'Fixation Stability Test',
@@ -492,7 +494,7 @@ Future<void> _startFixationTest() async {
 
           _startEyeTracking();
 
-          await _audioService.speak('Practice trial. Look at the red cross.');
+          await _audioService.speak('Starting one practice trial');
           await _performDriftCorrection();
           _runFixationTrial();
         } catch (e) {
@@ -746,7 +748,7 @@ Future<void> _startFixationTest() async {
 
           _startEyeTracking();
 
-          await _audioService.speak('Practice trials. Look at targets quickly.');
+          await _audioService.speak('Practice trials. Look at the target as it moves.');
           await _performDriftCorrection();
           _runProsaccadeTrial();
         } catch (e) {
@@ -856,6 +858,32 @@ Future<void> _startFixationTest() async {
             AppLogger.logger.info('All prosaccade trials completed');
             _stopEyeTracking();
             _eyeTrackingService.clearData();
+
+            // Export prosaccade data
+            final sessionData = EyeTrackingSessionData(
+              participantId: _participantId!,
+              sessionId: 'eye_tracking_prosaccade_${DateTime.now().millisecondsSinceEpoch}',
+              timestamp: DateTime.now(),
+              trials: _trials,
+              features: EyeTrackingFeatureExtraction.extractSessionFeatures(
+                EyeTrackingSessionData(
+                  participantId: _participantId!,
+                  sessionId: 'temp',
+                  timestamp: DateTime.now(),
+                  trials: _trials,
+                  features: EyeTrackingFeatureExtraction.getEmptyFeatures(),
+                ),
+              ),
+            );
+
+            final dataExportService = getIt<DataExportService>();
+            try {
+              dataExportService.exportEyeTrackingSession(sessionData);
+              AppLogger.logger.info('Prosaccade test data exported successfully');
+            } catch (e) {
+              AppLogger.logger.warning('Failed to export prosaccade test data: $e');
+            }
+
             Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
             _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
             return;
@@ -920,6 +948,32 @@ Future<void> _startFixationTest() async {
                 AppLogger.logger.info('Prosaccade test block complete (hard stop after increment).');
                 _stopEyeTracking();
                 _eyeTrackingService.clearData();
+
+                // Export prosaccade data
+                final sessionData = EyeTrackingSessionData(
+                  participantId: _participantId!,
+                  sessionId: 'eye_tracking_prosaccade_${DateTime.now().millisecondsSinceEpoch}',
+                  timestamp: DateTime.now(),
+                  trials: _trials,
+                  features: EyeTrackingFeatureExtraction.extractSessionFeatures(
+                    EyeTrackingSessionData(
+                      participantId: _participantId!,
+                      sessionId: 'temp',
+                      timestamp: DateTime.now(),
+                      trials: _trials,
+                      features: EyeTrackingFeatureExtraction.getEmptyFeatures(),
+                    ),
+                  ),
+                );
+
+                final dataExportService = getIt<DataExportService>();
+                try {
+                  dataExportService.exportEyeTrackingSession(sessionData);
+                  AppLogger.logger.info('Prosaccade test data exported successfully');
+                } catch (e) {
+                  AppLogger.logger.warning('Failed to export prosaccade test data: $e');
+                }
+
                 Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
                 _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
                 return;
