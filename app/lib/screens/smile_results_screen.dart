@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../models/smile_data.dart';
 import '../utils/colors.dart';
-import '../models/test_progress.dart';
 
 class SmileResultsScreen extends StatefulWidget {
   final SmileSessionData sessionData;
@@ -256,7 +254,6 @@ class _SmileResultsScreenState extends State<SmileResultsScreen> {
 
   void _continueToNextTest() {
     if (!mounted) return;
-    Provider.of<TestProgress>(context, listen: false).markSmileCompleted();
     Navigator.of(context).pop();
   }
 }

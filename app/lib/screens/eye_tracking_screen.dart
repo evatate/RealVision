@@ -17,7 +17,7 @@ import 'dart:async';
 import 'dart:math';
 import '../services/service_locator.dart';
 import 'package:google_mlkit_commons/google_mlkit_commons.dart';
-import 'eye_tracking_results_screen.dart';
+//import 'eye_tracking_results_screen.dart';
 
 enum EyeTrackingTask { none, fixation, prosaccade, pursuit, driftCorrection }
 
@@ -297,7 +297,9 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Great! Remember: Complete all 3 tests.',
+              testType == 'all' 
+                ? "You've completed all 3 eye tracking tests! Your data has been saved."
+                : 'Great! Remember: Complete all 3 tests.',
               style: TextStyle(
                 fontSize: 20,
                 color: AppColors.textDark,
@@ -317,27 +319,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
                 } else if (testType == 'prosaccade') {
                   _startSmoothPursuitTest();
                 } else if (testType == 'all') {
-                  final features = EyeTrackingFeatureExtraction.extractSessionFeatures(
-                    EyeTrackingSessionData(
-                      participantId: _participantId!,
-                      sessionId: 'temp',
-                      timestamp: DateTime.now(),
-                      trials: _trials,
-                      features: EyeTrackingFeatureExtraction.getEmptyFeatures(),
-                    ),
-                  );
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (context) => const EyeTrackingResultsScreen(),
-                      settings: RouteSettings(arguments: EyeTrackingSessionData(
-                        participantId: _participantId!,
-                        sessionId: 'eye_tracking_${DateTime.now().millisecondsSinceEpoch}',
-                        timestamp: DateTime.now(),
-                        trials: _trials,
-                        features: features,
-                      )),
-                    ),
-                  );
+                  Navigator.pop(context); // Return to home screen
                 } else {
                   _resetTestState();
                 }
@@ -348,31 +330,33 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
                 padding: EdgeInsets.all(16),
               ),
               child: Text(
-                testType == 'all' ? 'View Results' : 'Continue with Next Test',
+                testType == 'all' ? 'Return to Home' : 'Continue with Next Test',
                 style: TextStyle(fontSize: 18, color: Colors.white),
                 textAlign: TextAlign.center,
               ),
             ),
           ),
-          SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _resetTestState();
-              },
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: AppColors.primary, width: 2),
-                padding: EdgeInsets.all(16),
-              ),
-              child: Text(
-                'Return to Eye Tracking Tests',
-                style: TextStyle(fontSize: 18, color: AppColors.primary),
-                textAlign: TextAlign.center,
+          if (testType != 'all') ...[
+            SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _resetTestState();
+                },
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: AppColors.primary, width: 2),
+                  padding: EdgeInsets.all(16),
+                ),
+                child: Text(
+                  'Return to Eye Tracking Tests',
+                  style: TextStyle(fontSize: 18, color: AppColors.primary),
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );

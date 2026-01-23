@@ -11,7 +11,7 @@ import '../utils/logger.dart';
 import '../widgets/breadcrumb.dart';
 import 'dart:async';
 import '../services/service_locator.dart';
-import 'gait_results_screen.dart';
+//import 'gait_results_screen.dart';
 
 class GaitTestScreen extends StatefulWidget {
   const GaitTestScreen({super.key});
@@ -132,11 +132,12 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
     // Navigate to results screen
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => GaitResultsScreen(sessionData: sessionData),
-          ),
-        );
+        // Navigator.of(context).pushReplacement(
+        //   MaterialPageRoute(
+        //     builder: (context) => GaitResultsScreen(sessionData: sessionData),
+        //   ),
+        // );
+        Navigator.pop(context); // Just go back instead
       }
     });
   }

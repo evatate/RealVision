@@ -10,10 +10,13 @@ import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../utils/logger.dart';
 import '../widgets/breadcrumb.dart';
-import 'smile_results_screen.dart';
+//import 'smile_results_screen.dart';
 import '../services/service_locator.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import '../models/test_progress.dart';
+import 'package:provider/provider.dart';
+
 
 enum SmilePhase { none, neutral, smile, neutral2, complete }
 
@@ -349,15 +352,19 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
       AppLogger.logger.severe('Failed to export smile session data: $error');
     });
 
+    // Mark test as completed before navigation
+    Provider.of<TestProgress>(context, listen: false).markSmileCompleted();
+
     // Navigate to results screen
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (context) => SmileResultsScreen(
-          sessionData: sessionData,
-          exportPath: null,
-        ),
-      ),
-    );
+    // Navigator.of(context).pushReplacement(
+    //   MaterialPageRoute(
+    //     builder: (context) => SmileResultsScreen(
+    //       sessionData: sessionData,
+    //       exportPath: null,
+    //     ),
+    //   ),
+    // );
+    Navigator.pop(context); // Just go back instead
   }
 
   @override
