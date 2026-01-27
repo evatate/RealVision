@@ -1,7 +1,7 @@
 name: realvision
 description: ADRD assessment application with multimodal biomarker detection
 publish_to: 'none'
-version: 1.0.0+2
+version: 1.0.0+3
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -32,9 +32,6 @@ dependencies:
   
   # Motion Sensors
   sensors_plus: ^7.0.0
-  
-  # Health Data (keeping for fallback)
-  health: ^13.2.1
   
   # ML Models
   tflite_flutter: ^0.12.1
