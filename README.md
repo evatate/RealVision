@@ -123,7 +123,7 @@ This deployment mirrors cloud-based architectures used in prior validated mobile
 RealVision is currently available on the App Store and pending approval on the Google Play Store. It currently requires a
 partiicpant ID provided by research staff.
 
-__
+___
 
 ## Disclaimer
 
