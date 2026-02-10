@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:async';
 import '../services/camera_service.dart';
 import '../services/audio_service.dart';
 import '../services/face_detection_service.dart';
 import '../models/smile_data.dart';
+import '../models/test_progress.dart';
 import '../services/data_export_service.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
@@ -12,10 +16,6 @@ import '../utils/logger.dart';
 import '../widgets/breadcrumb.dart';
 //import 'smile_results_screen.dart';
 import '../services/service_locator.dart';
-import 'dart:async';
-import 'package:flutter/foundation.dart';
-import '../models/test_progress.dart';
-import 'package:provider/provider.dart';
 
 
 enum SmilePhase { none, neutral, smile, neutral2, complete }
@@ -136,8 +136,11 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
 
       await Future.delayed(const Duration(milliseconds: 500));
 
-      // Initialize data collection
-      _participantId = 'participant_${DateTime.now().millisecondsSinceEpoch}';
+      if (!mounted) return;
+
+      // Get participant ID from global state
+      final participantId = Provider.of<TestProgress>(context, listen: false).participantId ?? 'unknown_participant';
+      _participantId = participantId;
       _collectedTrials = [];
       _currentTrialFrames = [];
       _trialStopwatch = Stopwatch();

@@ -3,8 +3,18 @@ import '../services/aws_storage_service.dart';
 import '../services/progress_storage_service.dart';
 
 class TestProgress with ChangeNotifier {
+  String? _participantId;
+  
+  String? get participantId => _participantId;
+  
+  void setParticipantId(String participantId) {
+    _participantId = participantId;
+    notifyListeners();
+  }
+  
   // Serialization
   Map<String, dynamic> toMap() => {
+    'participantId': _participantId,
     'speechCompleted': _speechCompleted,
     'fixationCompleted': _fixationCompleted,
     'prosaccadeCompleted': _prosaccadeCompleted,
@@ -15,6 +25,7 @@ class TestProgress with ChangeNotifier {
 
   static TestProgress fromMap(Map<String, dynamic> map) {
     final progress = TestProgress();
+    progress._participantId = map['participantId'];
     progress._speechCompleted = map['speechCompleted'] ?? false;
     progress._fixationCompleted = map['fixationCompleted'] ?? false;
     progress._prosaccadeCompleted = map['prosaccadeCompleted'] ?? false;
@@ -86,6 +97,7 @@ class TestProgress with ChangeNotifier {
   }
 
   void resetProgress() {
+    _participantId = null;
     _speechCompleted = false;
     _fixationCompleted = false;
     _prosaccadeCompleted = false;
@@ -101,6 +113,7 @@ class TestProgress with ChangeNotifier {
 class PersistentTestProgress extends TestProgress {
   PersistentTestProgress([TestProgress? initial]) {
     if (initial != null) {
+      _participantId = initial.participantId;
       _speechCompleted = initial.speechCompleted;
       _fixationCompleted = initial.fixationCompleted;
       _prosaccadeCompleted = initial.prosaccadeCompleted;

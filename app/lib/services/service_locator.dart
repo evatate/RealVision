@@ -6,6 +6,7 @@ import 'motion_sensor_service.dart';
 import 'aws_auth_service.dart'; 
 import 'aws_storage_service.dart';
 import 'data_export_service.dart';
+import 'user_validation_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -23,6 +24,7 @@ void setupServiceLocator() {
 
   /// App Services
   getIt.registerLazySingleton<AudioService>(() => AudioService());
+  getIt.registerLazySingleton<UserValidationService>(() => UserValidationService());
   getIt.registerFactory<CameraService>(() => CameraService());
   getIt.registerFactory<EyeTrackingService>(() => EyeTrackingService());
   getIt.registerFactory<MotionSensorService>(() => MotionSensorService());

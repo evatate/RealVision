@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:path_provider/path_provider.dart';
 import '../models/test_progress.dart';
 import '../services/audio_service.dart';
 import '../services/aws_storage_service.dart';
@@ -81,6 +83,10 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       }
       return;
     }
+
+    // Get participant ID from global state
+    final participantId = Provider.of<TestProgress>(context, listen: false).participantId ?? 'unknown_participant';
+    AppLogger.logger.info('Starting speech test for participant: $participantId');
 
     setState(() {
       _isListening = true;
@@ -184,6 +190,12 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
         final s3Key = await _awsStorage.uploadAudioFile(wavPath);
         if (s3Key != null) {
           AppLogger.logger.info('WAV uploaded to S3: $s3Key');
+          
+          // Get participant ID and create metadata
+          if (mounted) {
+            final participantId = Provider.of<TestProgress>(context, listen: false).participantId ?? 'unknown_participant';
+            await _exportSpeechMetadata(s3Key, testDuration, participantId);
+          }
         } else {
           AppLogger.logger.severe('S3 upload failed for $wavPath');
         }
@@ -205,6 +217,47 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) Navigator.pop(context);
     });
+  }
+
+  Future<void> _exportSpeechMetadata(String s3Key, Duration testDuration, String participantId) async {
+    try {
+      final metadata = {
+        'participantId': participantId,
+        'testType': 'speech',
+        'exportedAt': DateTime.now().toIso8601String(),
+        'sessionData': {
+          'participantId': participantId,
+          'sessionId': 'speech_${DateTime.now().millisecondsSinceEpoch}',
+          'timestamp': _testStartTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
+          'duration': testDuration.inSeconds,
+          's3Key': s3Key,
+          'testType': 'speech_description',
+        },
+      };
+      
+      final directory = await getApplicationDocumentsDirectory();
+      final filename = 'speech_${participantId}_${DateTime.now().toIso8601String().split('T')[0]}.json';
+      final file = File('${directory.path}/$filename');
+      
+      final jsonString = jsonEncode(metadata);
+      await file.writeAsString(jsonString);
+      
+      AppLogger.logger.info('Speech metadata exported to: ${file.path}');
+      
+      // Also upload metadata to S3
+      try {
+        final metadataS3Key = await _awsStorage.uploadFile(file.path, 'speech');
+        if (metadataS3Key != null) {
+          AppLogger.logger.info('Speech metadata uploaded to S3: $metadataS3Key');
+        } else {
+          AppLogger.logger.warning('Failed to upload speech metadata to S3');
+        }
+      } catch (e) {
+        AppLogger.logger.warning('Failed to upload speech metadata to S3, but local export succeeded: $e');
+      }
+    } catch (e) {
+      AppLogger.logger.severe('Error exporting speech metadata: $e');
+    }
   }
 
   @override

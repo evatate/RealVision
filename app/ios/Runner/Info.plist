@@ -28,6 +28,14 @@
 	<string>This app needs microphone access to record your speech during the test</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>This app needs speech recognition for live transcription</string>
+	<key>NSMotionUsageDescription</key>
+	<string>RealVision needs motion sensor access for gait analysis during walking tests</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

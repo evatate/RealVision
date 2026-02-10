@@ -20,7 +20,14 @@ class DataExportService {
       final filename = 'smile_${session.participantId}_${session.timestamp.toIso8601String().split('T')[0]}.json';
       final file = File('${directory.path}/$filename');
 
-      final jsonString = jsonEncode(session.toJson());
+      // Create JSON with participantId at the top
+      final jsonData = {
+        'participantId': session.participantId,
+        'testType': 'smile',
+        'exportedAt': DateTime.now().toIso8601String(),
+        'sessionData': session.toJson(),
+      };
+      final jsonString = jsonEncode(jsonData);
       await file.writeAsString(jsonString);
 
       AppLogger.logger.info('Exported smile session to: ${file.path}');
@@ -60,7 +67,14 @@ class DataExportService {
       final filename = 'gait_${session.participantId}_${session.timestamp.toIso8601String().split('T')[0]}.json';
       final file = File('${directory.path}/$filename');
 
-      final jsonString = jsonEncode(session.toJson());
+      // Create JSON with participantId at the top
+      final jsonData = {
+        'participantId': session.participantId,
+        'testType': 'gait',
+        'exportedAt': DateTime.now().toIso8601String(),
+        'sessionData': session.toJson(),
+      };
+      final jsonString = jsonEncode(jsonData);
       await file.writeAsString(jsonString);
 
       AppLogger.logger.info('Exported gait session to: ${file.path}');
@@ -100,7 +114,14 @@ class DataExportService {
       final filename = 'eye_tracking_${session.participantId}_${session.timestamp.toIso8601String().split('T')[0]}.json';
       final file = File('${directory.path}/$filename');
 
-      final jsonString = jsonEncode(session.toJson());
+      // Create JSON with participantId at the top
+      final jsonData = {
+        'participantId': session.participantId,
+        'testType': 'eye_tracking',
+        'exportedAt': DateTime.now().toIso8601String(),
+        'sessionData': session.toJson(),
+      };
+      final jsonString = jsonEncode(jsonData);
       await file.writeAsString(jsonString);
 
       AppLogger.logger.info('Exported eye tracking session to: ${file.path}');
@@ -141,7 +162,15 @@ class DataExportService {
 
       final jsonString = await file.readAsString();
       final jsonData = jsonDecode(jsonString);
-      return SmileSessionData.fromJson(jsonData);
+      
+      // Handle both old and new JSON structures
+      if (jsonData.containsKey('sessionData')) {
+        // New structure with participant ID at top
+        return SmileSessionData.fromJson(jsonData['sessionData']);
+      } else {
+        // Old structure with direct session data
+        return SmileSessionData.fromJson(jsonData);
+      }
     } catch (e) {
       AppLogger.logger.severe('Error loading smile session: $e');
       return null;
@@ -156,7 +185,15 @@ class DataExportService {
 
       final jsonString = await file.readAsString();
       final jsonData = jsonDecode(jsonString);
-      return GaitSessionData.fromJson(jsonData);
+      
+      // Handle both old and new JSON structures
+      if (jsonData.containsKey('sessionData')) {
+        // New structure with participant ID at top
+        return GaitSessionData.fromJson(jsonData['sessionData']);
+      } else {
+        // Old structure with direct session data
+        return GaitSessionData.fromJson(jsonData);
+      }
     } catch (e) {
       AppLogger.logger.severe('Error loading gait session: $e');
       return null;
@@ -171,7 +208,15 @@ class DataExportService {
 
       final jsonString = await file.readAsString();
       final jsonData = jsonDecode(jsonString);
-      return EyeTrackingSessionData.fromJson(jsonData);
+      
+      // Handle both old and new JSON structures
+      if (jsonData.containsKey('sessionData')) {
+        // New structure with participant ID at top
+        return EyeTrackingSessionData.fromJson(jsonData['sessionData']);
+      } else {
+        // Old structure with direct session data
+        return EyeTrackingSessionData.fromJson(jsonData);
+      }
     } catch (e) {
       AppLogger.logger.severe('Error loading eye tracking session: $e');
       return null;

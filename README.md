@@ -1,6 +1,6 @@
 # RealVision: Multimodal Machine Learning for ADRD Screening
 
-RealVision is a fully deployed, cross-platform (iOS and Android) mobile application for multimodal screening of **Alzheimer’s Disease and Related Dementias (ADRD)**. The system integrates four behavioral and neurological indicators that have been independently validated in prior machine learning and clinical research:
+RealVision is a fully deployed, cross-platform (iOS and Android) mobile application for multimodal screening of Alzheimer’s Disease and Related Dementias (ADRD). The system integrates four behavioral and neurological indicators that have been independently validated in prior machine learning and clinical research:
 
 1. Speech and prosodic impairments
 2. Abnormal eye movement characteristics
@@ -9,7 +9,7 @@ RealVision is a fully deployed, cross-platform (iOS and Android) mobile applicat
 
 The project consists of a complete pipeline including data acquisition, multimodal feature extraction, supervised machine learning architectures, and deployment to a patient-facing mobile application.
 
-RealVision is designed as a **screening and research tool**, not a diagnostic system. The platform is currently in **beta testing** and is being prepared for **clinical validation studies**.
+RealVision is designed as a **screening and research tool**, not a diagnostic system. The platform will be used in clinical validation studies.
 
 ---
 
@@ -26,7 +26,7 @@ Prior work has shown that individual modalities can identify ADRD characteristic
 - Gait speed and variability decline years before clinical diagnosis  
 - Facial expressiveness, including smile dynamics, differs significantly between ADRD/MCI and healthy controls  
 
-RealVision unifies these signals into a **single, patient-facing smartphone application**, enabling scalable, low-burden cognitive screening outside traditional clinical environments.
+RealVision unifies these signals into a single, patient-facing smartphone application, enabling scalable, low-burden cognitive screening outside traditional clinical environments.
 
 ---
 
@@ -39,9 +39,7 @@ RealVision follows a **feature-based multimodal ML architecture**, prioritizing 
 | **Speech** | Audio + transcript | Acoustic, linguistic, semantic features | Cognitive risk score + MMSE regression |
 | **Eye Tracking** | Front camera video | Fixation stability, saccade latency, pursuit error | Oculomotor impairment score |
 | **Facial Expressions** | Front camera video | Smile index dynamics, facial variability | Facial expressiveness score |
-| **Gait** | HealthKit / Health Connect | Speed, cadence, variability | Gait unsteadiness score |
-
-Each modality produces an **interpretable subscore**. These outputs are designed for later fusion into a multimodal model during clinical evaluation.
+| **Gait** | Accelerometer and Gyroscope | Speed, cadence, variability | Gait unsteadiness score |
 
 ---
 
@@ -55,7 +53,7 @@ The mobile app implements:
 - A standardized smile test (two 15-second trials)  
 - A 2-minute walking test using device health APIs  
 
-The UI is intentionally simple and voice-guided to support older adults and first-time users, consistent with prior clinical tablet-based studies.
+The UI is intentionally simple and voice-guided to support older adults and first-time users, consistent with prior clinical tablet-based studies and guides for dementia-friendly design.
 
 ---
 
@@ -99,9 +97,10 @@ This deployment mirrors cloud-based architectures used in prior validated mobile
 - Walking speed, cadence, and variability from HealthKit / Health Connect
 - Session-level gait unsteadiness metrics
 
+### Beta Testing (Completed)
+- Critical bug fixes
+
 ### Current Work
-- Bug fixes identified during beta testing
-- Stability and performance improvements
 - Final preparation for clinical trials
 
 ---
@@ -119,16 +118,12 @@ This deployment mirrors cloud-based architectures used in prior validated mobile
 
 ---
 
-## Research & Clinical Path Forward
+## Deployment
 
-Planned next steps:
-1. Completion of beta testing and bug fixes  
-2. Deployment in controlled clinical studies  
-3. Supervised training of multimodal ADRD classifiers  
-4. Evaluation using AUC, sensitivity, and specificity  
-5. Peer-reviewed publication of results  
+RealVision is currently available on the App Store and pending approval on the Google Play Store. It currently requires a
+partiicpant ID provided by research staff.
 
----
+__
 
 ## Disclaimer
 

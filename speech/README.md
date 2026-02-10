@@ -2,7 +2,7 @@
 
 This module implements the **speech-based ADRD screening pipeline** used in the RealVision platform. The pipeline processes spontaneous speech collected via the RealVision mobile application and extracts clinically motivated acoustic and linguistic features for machine-learning–based screening and cognitive score estimation.
 
-The speech pipeline is **fully deployed and operational**, running automatically on **AWS EC2 instances** as part of the production system.
+The speech pipeline is fully deployed and operational, running automatically on **AWS EC2 instances** as part of the production system.
 
 ---
 

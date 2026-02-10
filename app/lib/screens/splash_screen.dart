@@ -3,7 +3,10 @@ import '../utils/colors.dart';
 import '../services/service_locator.dart';
 import '../services/audio_service.dart';
 import '../services/aws_auth_service.dart';
+import '../services/user_validation_service.dart';
 import '../utils/logger.dart';
+import '../models/test_progress.dart';
+import 'package:provider/provider.dart';
 import 'home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -16,8 +19,12 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> {
   bool _isLoading = true;
   String _statusMessage = 'Initializing...';
-
   bool _instructionsSpoken = false;
+  bool _isAuthenticated = false;
+  bool _isValidating = false;
+  
+  final TextEditingController _usernameController = TextEditingController();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
@@ -33,7 +40,7 @@ class _SplashScreenState extends State<SplashScreen> {
     try {
       setState(() => _statusMessage = 'Checking authentication...');
       
-      // Ensure user is signed in (checks existing session first, only creates new user if needed)
+      // Ensure user is signed in
       final awsAuth = getIt<AWSAuthService>();
       final userId = await awsAuth.ensureSignedIn();
       
@@ -47,6 +54,10 @@ class _SplashScreenState extends State<SplashScreen> {
       final audioService = getIt<AudioService>();
       await audioService.initialize();
       
+      setState(() => _statusMessage = 'Setting up secure storage...');
+      final validationService = getIt<UserValidationService>();
+      await validationService.initialize();
+      
       // Ensure minimum splash duration
       final elapsed = DateTime.now().difference(startTime);
       if (elapsed < minSplashDuration) {
@@ -55,7 +66,7 @@ class _SplashScreenState extends State<SplashScreen> {
       
       setState(() {
         _isLoading = false;
-        _statusMessage = 'Ready!';
+        _statusMessage = 'Enter your participant ID to continue';
       });
     } catch (e) {
       AppLogger.logger.severe('Initialization error: $e');
@@ -68,19 +79,94 @@ class _SplashScreenState extends State<SplashScreen> {
       
       setState(() {
         _isLoading = false;
-        _statusMessage = 'Ready (some services unavailable)';
+        _statusMessage = 'Enter your participant ID to continue';
       });
     }
+  }
 
-    final audioService = getIt<AudioService>();
-    if (mounted && !_instructionsSpoken) {
-      _instructionsSpoken = true;
-      await audioService.speak(
-        'Complete all four tests. '
-        'Complete the eye tracking tests in order.'
-        'Find a quiet, well lit space. '
-        'Follow the audio instructions. '
-        'Press Start Assessment to begin.'
+  Future<bool> _checkUsername(String username) async {
+    if (username.trim().isEmpty) return false;
+    
+    try {
+      final validationService = getIt<UserValidationService>();
+      return await validationService.validateUsername(username);
+    } catch (e) {
+      AppLogger.logger.warning('Username validation error: $e');
+      return false;
+    }
+  }
+
+  Future<void> _validateAndProceed() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    setState(() {
+      _isValidating = true;
+      _statusMessage = 'Validating participant ID...';
+    });
+    
+    final username = _usernameController.text;
+    final isValid = await _checkUsername(username);
+    
+    if (!mounted) return;
+    
+    if (isValid) {
+      // Store the validated participant ID in global state
+      if (mounted) {
+        Provider.of<TestProgress>(context, listen: false).setParticipantId(username);
+      }
+      
+      setState(() {
+        _isAuthenticated = true;
+        _statusMessage = 'Validated! Preparing assessment...';
+      });
+      
+      // Speak instructions after successful validation
+      final audioService = getIt<AudioService>();
+      if (!_instructionsSpoken) {
+        _instructionsSpoken = true;
+        await audioService.speak(
+          'Welcome! Complete all four tests. '
+          'Complete the eye tracking tests in order. '
+          'Find a quiet, well lit space. '
+          'Follow the audio instructions.'
+        );
+      }
+      
+      setState(() {
+        _isValidating = false;
+        _statusMessage = 'Ready to begin assessment!';
+      });
+    } else {
+      setState(() {
+        _isValidating = false;
+        _statusMessage = 'Enter your participant ID to continue';
+      });
+      
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.cardBackground,
+          title: Text(
+            'Invalid Participant ID',
+            style: TextStyle(
+              color: AppColors.textDark,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'Please contact the research team for assistance.',
+            style: TextStyle(color: AppColors.textDark),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(
+                'OK',
+                style: TextStyle(color: AppColors.primary),
+              ),
+            ),
+          ],
+        ),
       );
     }
   }
@@ -144,7 +230,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   
                   SizedBox(height: 24),
                   
-                  if (_isLoading)
+                  if (_isLoading || _isValidating)
                     Column(
                       children: [
                         CircularProgressIndicator(
@@ -157,6 +243,66 @@ class _SplashScreenState extends State<SplashScreen> {
                           style: TextStyle(
                             fontSize: 16,
                             color: AppColors.textMedium,
+                          ),
+                        ),
+                      ],
+                    )
+                  else if (!_isAuthenticated)
+                    Column(
+                      children: [
+                        Text(
+                          _statusMessage,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: AppColors.textMedium,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 20),
+                        Form(
+                          key: _formKey,
+                          child: TextFormField(
+                            controller: _usernameController,
+                            decoration: InputDecoration(
+                              labelText: 'Participant ID',
+                              hintText: 'Enter your participant ID',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(
+                                  color: AppColors.primary,
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter your participant ID';
+                              }
+                              return null;
+                            },
+                            onFieldSubmitted: (_) => _validateAndProceed(),
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _validateAndProceed,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              padding: EdgeInsets.all(16),
+                            ),
+                            child: Text(
+                              'Continue',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -198,7 +344,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   
                   SizedBox(height: 48),
                   
-                  if (!_isLoading)
+                  if (_isAuthenticated && !_isLoading && !_isValidating)
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(

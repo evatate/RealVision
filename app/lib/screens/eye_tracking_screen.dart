@@ -450,7 +450,9 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
     );
   }
 Future<void> _startFixationTest() async {
-    _participantId ??= 'participant_${DateTime.now().millisecondsSinceEpoch}';
+    // Get participant ID from global state
+    final participantId = Provider.of<TestProgress>(context, listen: false).participantId ?? 'unknown_participant';
+    _participantId = participantId;
     // Only clear if this is a fresh start (no trials yet)
     if (_trials.isEmpty) {
       _trials = [];
@@ -979,7 +981,9 @@ Future<void> _startFixationTest() async {
   }
 
   Future<void> _startSmoothPursuitTest() async {
-    _participantId ??= 'participant_${DateTime.now().millisecondsSinceEpoch}';
+    // Get participant ID from global state
+    final participantId = Provider.of<TestProgress>(context, listen: false).participantId ?? 'unknown_participant';
+    _participantId = participantId;
 
     _showInstructions(
       'Smooth Pursuit Test',

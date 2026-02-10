@@ -94,9 +94,12 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
     // Extract features from the trial
     final features = GaitFeatureExtraction.extractTrialFeatures(trialData);
 
+    // Get participant ID from global state
+    final participantId = Provider.of<TestProgress>(context, listen: false).participantId ?? 'unknown_participant';
+
     // Create session data
     final sessionData = GaitSessionData(
-      participantId: 'participant_001', 
+      participantId: participantId,
       sessionId: 'gait_${DateTime.now().millisecondsSinceEpoch}',
       timestamp: _startTime!,
       trials: [trialData],

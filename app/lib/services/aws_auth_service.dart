@@ -53,14 +53,26 @@ class AWSAuthService {
       
       if (session.isSignedIn) {
         safePrint('User already signed in');
-        final user = await Amplify.Auth.getCurrentUser();
-        _currentUserId = user.userId;
-        await _secureStorage.write(key: _userIdKey, value: _currentUserId);
-        await ensureAwsCredentials();
-        return _currentUserId;
+        try {
+          // Try to get current user to verify session is actually valid
+          final user = await Amplify.Auth.getCurrentUser();
+          _currentUserId = user.userId;
+          await _secureStorage.write(key: _userIdKey, value: _currentUserId);
+          await ensureAwsCredentials();
+          return _currentUserId;
+        } catch (e) {
+          // Session says signed in but getCurrentUser fails - sign out and retry
+          safePrint('Session inconsistent, signing out: $e');
+          try {
+            await Amplify.Auth.signOut();
+          } catch (signOutError) {
+            safePrint('Sign out also failed: $signOutError');
+          }
+          // Continue to credential check below
+        }
       }
       
-      safePrint('No active session, checking stored credentials...');
+      safePrint('No valid session, checking stored credentials...');
       
       // Check if we have stored credentials
       final existingEmail = await _secureStorage.read(key: _userEmailKey);
