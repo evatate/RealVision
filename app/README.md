@@ -46,8 +46,8 @@ As tasks are completed, checkmarks appear. When finished, the “View Results”
 
 ## Status of Testing Across Platforms
 
-| Platform | Status | Notes |
-|---------|--------|------|
+| Platform | Status |
+|---------|--------|
 | **Android** | Awaiting Google Play acceptance |
 | **iOS** | Published to the App Store |
 
