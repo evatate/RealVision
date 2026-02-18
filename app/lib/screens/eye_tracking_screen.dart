@@ -41,8 +41,8 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
           return 0;
       }
     }
-  late CameraService _cameraService = CameraService();
-  late AudioService _audioService = AudioService();
+  final CameraService _cameraService = CameraService();
+  final AudioService _audioService = getIt<AudioService>();
   final EyeTrackingService _eyeTrackingService = EyeTrackingService();
   final FaceDetectionService _faceDetector = FaceDetectionService();
   
@@ -71,8 +71,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   @override
   void initState() {
     super.initState();
-    _cameraService = getIt<CameraService>();
-    _audioService = getIt<AudioService>();
     _initializeServices();
   }
 
@@ -121,7 +119,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     
     // Dispose services
     _cameraService.dispose();
-    _audioService.dispose();
     _eyeTrackingService.dispose();
     _faceDetector.dispose();
     super.dispose();

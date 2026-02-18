@@ -29,7 +29,7 @@ class FacialExpressionScreen extends StatefulWidget {
 
 class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   final CameraService _cameraService = CameraService();
-  final AudioService _audioService = AudioService();
+  final AudioService _audioService = getIt<AudioService>();
   final FaceDetectionService _faceDetector = FaceDetectionService();
   late DataExportService _dataExport;
   
@@ -63,7 +63,6 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
     _faceDetectionTimer?.cancel();
     _cameraService.stopImageStream();
     _cameraService.dispose();
-    _audioService.dispose();
     _faceDetector.dispose();
     super.dispose();
   }

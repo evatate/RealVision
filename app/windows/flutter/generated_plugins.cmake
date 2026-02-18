@@ -8,10 +8,12 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_sound
   flutter_tts
   permission_handler_windows
+  sentry_flutter
   url_launcher_windows
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
+  jni
   tflite_flutter
 )
 

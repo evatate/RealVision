@@ -22,7 +22,7 @@ class GaitTestScreen extends StatefulWidget {
 
 class _GaitTestScreenState extends State<GaitTestScreen> {
   final MotionSensorService _motionService = MotionSensorService();
-  late AudioService _audioService;
+  final AudioService _audioService = getIt<AudioService>();
   
   bool _isRecording = false;
   int _countdown = 0;
@@ -34,7 +34,6 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
   @override
   void initState() {
     super.initState();
-    _audioService = getIt<AudioService>();
     _audioService.initialize();
   }
 

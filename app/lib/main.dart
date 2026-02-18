@@ -8,6 +8,7 @@ import 'screens/splash_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/aws_auth_service.dart';
 import 'utils/logger.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +25,24 @@ void main() async {
   // Load progress from shared preferences
   final loadedProgress = await ProgressStorageService.loadProgress();
 
-  runApp(RealVisionApp(progress: PersistentTestProgress(loadedProgress)));
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = 'https://14308657c583e95ba6608a84d8c61626@o4510903463772160.ingest.us.sentry.io/4510903468621824';
+      // Adds request headers and IP for users, for more info visit:
+      // https://docs.sentry.io/platforms/dart/guides/flutter/data-management/data-collected/
+      options.sendDefaultPii = true;
+      options.enableLogs = true;
+      // Set tracesSampleRate to 0.5 to capture 50% of transactions for tracing.
+      options.tracesSampleRate = 0.5;
+      // The sampling rate for profiling is relative to tracesSampleRate
+      // Setting to 0.5 will profile 50% of sampled transactions:
+      options.profilesSampleRate = 0.5;
+      // Configure Session Replay
+      options.replay.sessionSampleRate = 0.1;
+      options.replay.onErrorSampleRate = 1.0;
+    },
+    appRunner: () => runApp(SentryWidget(child: RealVisionApp(progress: PersistentTestProgress(loadedProgress)))),
+  );
 }
 
 class RealVisionApp extends StatelessWidget {
@@ -38,6 +56,9 @@ class RealVisionApp extends StatelessWidget {
       child: MaterialApp(
         title: 'RealVision',
         debugShowCheckedModeBanner: false,
+        navigatorObservers: [
+          SentryNavigatorObserver(),
+        ],
         theme: ThemeData(
           primarySwatch: Colors.blue,
           scaffoldBackgroundColor: AppColors.background,

@@ -21,7 +21,7 @@ class SpeechTestScreen extends StatefulWidget {
 }
 
 class _SpeechTestScreenState extends State<SpeechTestScreen> {
-  final AudioService _audioService = AudioService();
+  late final AudioService _audioService;
   final AWSStorageService _awsStorage = getIt<AWSStorageService>();
   bool _isListening = false;
   bool _initialized = false;
@@ -38,6 +38,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
   @override
   void initState() {
     super.initState();
+    _audioService = getIt<AudioService>();
     _initializeAudio();
   }
 
@@ -85,8 +86,10 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     }
 
     // Get participant ID from global state
-    final participantId = Provider.of<TestProgress>(context, listen: false).participantId ?? 'unknown_participant';
-    AppLogger.logger.info('Starting speech test for participant: $participantId');
+    if (mounted) {
+      final participantId = Provider.of<TestProgress>(context, listen: false).participantId;
+      AppLogger.logger.info('Starting speech test for participant: $participantId');
+    }
 
     setState(() {
       _isListening = true;
@@ -266,10 +269,6 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     _minimumTimeTimer?.cancel();
     _audioService.stopRecording();
     super.dispose();
-    // Dispose audio service after a delay to let final TTS complete
-    Future.delayed(const Duration(seconds: 3), () {
-      _audioService.dispose();
-    });
   }
 
   @override

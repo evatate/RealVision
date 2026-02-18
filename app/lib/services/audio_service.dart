@@ -147,10 +147,11 @@ class AudioService {
       await _flutterTts.setPitch(AppConstants.speechPitch);
       if (Platform.isIOS) {
         await _flutterTts.setIosAudioCategory(
-          IosTextToSpeechAudioCategory.playback,
+          IosTextToSpeechAudioCategory.playAndRecord,
           [
-            IosTextToSpeechAudioCategoryOptions.mixWithOthers,
-            IosTextToSpeechAudioCategoryOptions.duckOthers,
+            IosTextToSpeechAudioCategoryOptions.allowBluetooth,
+            IosTextToSpeechAudioCategoryOptions.allowBluetoothA2DP,
+            IosTextToSpeechAudioCategoryOptions.defaultToSpeaker,
           ],
           IosTextToSpeechAudioMode.defaultMode,
         );
@@ -283,9 +284,6 @@ class AudioService {
           onDevice: false,
           listenMode: ListenMode.confirmation,
         ),
-        onSoundLevelChange: (level) {
-          // Activity detected
-        },
         cancelOnError: false,
       );
     } catch (e) {
