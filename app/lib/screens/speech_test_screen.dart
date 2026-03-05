@@ -213,15 +213,61 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       Provider.of<TestProgress>(context, listen: false).markSpeechCompleted();
     }
 
-    await _audioService.speak('Thank you. Speech test complete.');
-
     AppLogger.logger.info('Speech recording complete. Duration: ${testDuration.inSeconds} seconds');
 
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) Navigator.pop(context);
-    });
+    _showCompletionDialog();
   }
 
+  void _showCompletionDialog() {
+    _audioService.speak('The speech test is now complete. You can close this screen, unless a researcher asks you to do it again.');
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: AppColors.cardBackground,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green[700], size: 40),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Text(
+                  'Test Complete!',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textDark,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'You have finished the speech test. Please only do this test again if the research team asks you to.',
+            style: TextStyle(fontSize: 22, color: AppColors.textDark),
+            textAlign: TextAlign.center,
+          ),
+          actions: <Widget>[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pop(); // Dismiss dialog
+                  Navigator.of(context).pop(); // Go back to previous screen
+                },
+                child: const Text('OK', style: TextStyle(fontSize: 24, color: Colors.white)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
   Future<void> _exportSpeechMetadata(String s3Key, Duration testDuration, String participantId) async {
     try {
       final metadata = {

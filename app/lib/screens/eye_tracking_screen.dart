@@ -274,88 +274,124 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
   }
 
   void _showTestCompletionDialog(String title, String testType) {
-    _audioService.speak(testType == 'all' ? 'All eye tracking tests finished!' : '$testType test complete');
+    _audioService.speak(testType == 'all' 
+        ? 'All eye tracking tests are now complete. You can close this screen, unless a researcher asks you to do them again.' 
+        : '$testType test complete');
     
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: Text(
-          title,
-          style: TextStyle(
-            fontSize: 24,
-            color: AppColors.textDark,
-            fontWeight: FontWeight.bold,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              testType == 'all' 
-                ? "You've completed all 3 eye tracking tests! Your data has been saved."
-                : 'Great! Remember: Complete all 3 tests.',
+      builder: (context) {
+        if (testType == 'all') {
+          // Final completion dialog
+          return AlertDialog(
+            backgroundColor: AppColors.cardBackground,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green[700], size: 40),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Text(
+                    'Tests Complete!',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: const Text(
+              'You have finished all eye tracking tests. Please only do these tests again if the research team asks you to.',
+              style: TextStyle(fontSize: 22, color: AppColors.textDark),
+              textAlign: TextAlign.center,
+            ),
+            actions: <Widget>[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).pop(); // Dismiss dialog
+                    Navigator.of(context).pop(); // Go back to previous screen
+                  },
+                  child: const Text('OK', style: TextStyle(fontSize: 24, color: Colors.white)),
+                ),
+              ),
+            ],
+          );
+        } else {
+          // Intermediate dialog to continue to the next test
+          return AlertDialog(
+            backgroundColor: AppColors.cardBackground,
+            title: Text(
+              title,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 24,
                 color: AppColors.textDark,
+                fontWeight: FontWeight.bold,
               ),
               textAlign: TextAlign.center,
             ),
-          ],
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                if (testType == 'fixation') {
-                  _startProsaccadeTest();
-                } else if (testType == 'prosaccade') {
-                  _startSmoothPursuitTest();
-                } else if (testType == 'all') {
-                  Navigator.pop(context); // Return to home screen
-                } else {
-                  _resetTestState();
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.all(16),
-              ),
-              child: Text(
-                testType == 'all' ? 'Return to Home' : 'Continue with Next Test',
-                style: TextStyle(fontSize: 18, color: Colors.white),
-                textAlign: TextAlign.center,
-              ),
+            content: const Text(
+              'Great! Remember: Complete all 3 tests.',
+              style: TextStyle(fontSize: 20, color: AppColors.textDark),
+              textAlign: TextAlign.center,
             ),
-          ),
-          if (testType != 'all') ...[
-            SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _resetTestState();
-                },
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: AppColors.primary, width: 2),
-                  padding: EdgeInsets.all(16),
-                ),
-                child: Text(
-                  'Return to Eye Tracking Tests',
-                  style: TextStyle(fontSize: 18, color: AppColors.primary),
-                  textAlign: TextAlign.center,
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    if (testType == 'fixation') {
+                      _startProsaccadeTest();
+                    } else if (testType == 'prosaccade') {
+                      _startSmoothPursuitTest();
+                    } else {
+                      _resetTestState();
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.all(16),
+                  ),
+                  child: const Text(
+                    'Continue with Next Test',
+                    style: TextStyle(fontSize: 18, color: Colors.white),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ],
-      ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _resetTestState();
+                  },
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: AppColors.primary, width: 2),
+                    padding: const EdgeInsets.all(16),
+                  ),
+                  child: const Text(
+                    'Return to Eye Tracking Tests',
+                    style: TextStyle(fontSize: 18, color: AppColors.primary),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+      },
     );
   }
 

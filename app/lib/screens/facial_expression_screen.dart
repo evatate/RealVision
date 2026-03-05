@@ -314,6 +314,57 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
     AppLogger.logger.info('Completed trial ${_isPractice ? "practice" : _repetitionCount + 1} with ${trialData.frames.length} frames');
   }
 
+  void _showCompletionDialog() {
+    _audioService.speak('The smile test is now complete. You can close this screen, unless a researcher asks you to do it again.');
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: AppColors.cardBackground,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green[700], size: 40),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Text(
+                  'Test Complete!',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textDark,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'You have finished the smile test. Please only do this test again if the research team asks you to.',
+            style: TextStyle(fontSize: 22, color: AppColors.textDark),
+            textAlign: TextAlign.center,
+          ),
+          actions: <Widget>[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pop(); // Dismiss dialog
+                  Navigator.of(context).pop(); // Go back to previous screen
+                },
+                child: const Text('OK', style: TextStyle(fontSize: 24, color: Colors.white)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _completeTest() {
     // Stop face detection
     _stopFaceDetection();
@@ -357,16 +408,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
     // Mark test as completed before navigation
     Provider.of<TestProgress>(context, listen: false).markSmileCompleted();
 
-    // Navigate to results screen
-    // Navigator.of(context).pushReplacement(
-    //   MaterialPageRoute(
-    //     builder: (context) => SmileResultsScreen(
-    //       sessionData: sessionData,
-    //       exportPath: null,
-    //     ),
-    //   ),
-    // );
-    Navigator.pop(context); // Just go back instead
+    _showCompletionDialog();
   }
 
   @override
@@ -439,6 +481,11 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
 
   Widget _buildTestScreen() {
     final aspectRatio = _cameraService.controller?.value.aspectRatio ?? 1.0;
+    //var aspectRatio = _cameraService.controller?.value.aspectRatio ?? 1.0;
+    //if (MediaQuery.of(context).orientation == Orientation.portrait) {
+      //aspectRatio = 1 / aspectRatio;
+    //}
+
     return Padding(
       padding: EdgeInsets.all(16),
       child: SingleChildScrollView(
@@ -449,6 +496,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
               builder: (context, constraints) {
                 final maxPreviewWidth = constraints.maxWidth;
                 final maxPreviewHeight = MediaQuery.of(context).size.height * 0.7;
+                //final maxPreviewHeight = MediaQuery.of(context).size.height * 0.5;
                 double previewWidth = maxPreviewWidth;
                 double previewHeight = previewWidth / aspectRatio;
                 if (previewHeight > maxPreviewHeight) {

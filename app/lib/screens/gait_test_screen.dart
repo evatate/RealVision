@@ -116,10 +116,6 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
       AppLogger.logger.warning('Failed to export gait session data: $e');
     }
 
-    await _audioService.speak(
-      'Walking test complete. You took ${trialData.stepCount} steps. '
-    );
-
     AppLogger.logger.info('==== WALKING TEST RESULTS ====');
     AppLogger.logger.info('Steps: ${trialData.stepCount}');
     AppLogger.logger.info('Duration: ${trialData.duration.toStringAsFixed(1)} s');
@@ -131,18 +127,60 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
     AppLogger.logger.info('Gait Quality Score: ${features.gaitQualityScore.toStringAsFixed(3)}');
     AppLogger.logger.info('==============================');
 
-    // Navigate to results screen
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        // Navigator.of(context).pushReplacement(
-        //   MaterialPageRoute(
-        //     builder: (context) => GaitResultsScreen(sessionData: sessionData),
-        //   ),
-        // );
-        Navigator.pop(context); // Just go back instead
-      }
-    });
+    _showCompletionDialog();
   }
+
+  void _showCompletionDialog() {
+    _audioService.speak('The walking test is now complete. You can close this screen, unless a researcher asks you to do it again.');
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: AppColors.cardBackground,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green[700], size: 40),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Text(
+                  'Test Complete!',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textDark,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'You have finished the walking test. Please only do this test again if the research team asks you to.',
+            style: TextStyle(fontSize: 22, color: AppColors.textDark),
+            textAlign: TextAlign.center,
+          ),
+          actions: <Widget>[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pop(); // Dismiss dialog
+                  Navigator.of(context).pop(); // Go back to previous screen
+                },
+                child: const Text('OK', style: TextStyle(fontSize: 24, color: Colors.white)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
