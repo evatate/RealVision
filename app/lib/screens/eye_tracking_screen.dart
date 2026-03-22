@@ -5,7 +5,6 @@ import 'package:camera/camera.dart';
 import '../models/test_progress.dart';
 import '../services/camera_service.dart';
 import '../services/audio_service.dart';
-import '../services/face_detection_service.dart';
 import '../services/eye_tracking_service.dart';
 import '../models/eye_tracking_data.dart';
 import '../services/data_export_service.dart';
@@ -28,7 +27,7 @@ class EyeTrackingScreen extends StatefulWidget {
   State<EyeTrackingScreen> createState() => _EyeTrackingScreenState();
 }
 
-class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
+class _EyeTrackingScreenState extends State<EyeTrackingScreen> with WidgetsBindingObserver {
     int _getCurrentTrialNumber() {
       switch (_currentTask) {
         case EyeTrackingTask.fixation:
@@ -44,7 +43,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   final CameraService _cameraService = CameraService();
   final AudioService _audioService = getIt<AudioService>();
   final EyeTrackingService _eyeTrackingService = EyeTrackingService();
-  final FaceDetectionService _faceDetector = FaceDetectionService();
   
   String? _participantId;
 
@@ -64,6 +62,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   bool _isDriftCorrecting = false;
   List<int> _prosaccadeSequence = [];
   int _prosaccadeIndex = 0;
+  int _retryCount = 0;
   List<EyeTrackingTrialData> _trials = [];
   Size _screenSize = Size.zero;
   bool _isProcessingFrame = false;
@@ -71,6 +70,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeServices();
   }
 
@@ -81,14 +81,30 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
       if (mounted) {
         setState(() => _cameraInitialized = true);
       }
-    } catch (e) {
-      AppLogger.logger.severe('Service init error: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Service init error', e, stackTrace);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _stopEyeTracking();
+    } else if (state == AppLifecycleState.resumed) {
+      if (_currentTask != EyeTrackingTask.none) {
+        _cameraService.initialize().then((_) {
+          if (mounted && _currentTask != EyeTrackingTask.none) {
+            _startEyeTracking();
+          }
+        });
+      }
     }
   }
 
   @override
   void dispose() {
     // Cancel all timers and stop all processes first
+    WidgetsBinding.instance.removeObserver(this);
     _taskTimer?.cancel();
     _countdownTimer?.cancel();
     _eyeTrackingTimer?.cancel();
@@ -99,10 +115,9 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     
     // Reset services
     _eyeTrackingService.setAssessmentActive(false);
-    _faceDetector.setAssessmentActive(false);
     _eyeTrackingService.clearData();
     
-    // Reset state variables without setState
+    // Reset state variables
     _currentTask = EyeTrackingTask.none;
     _trialIndex = 0;
     _completedTrials = 0;
@@ -118,9 +133,14 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     _isProcessingFrame = false;
     
     // Dispose services
-    _cameraService.dispose();
+    try {
+      (_cameraService.dispose() as dynamic)?.catchError((e) {
+        AppLogger.logger.warning('Error disposing camera service: $e');
+      });
+    } catch (e) {
+      AppLogger.logger.warning('Error initiating camera disposal: $e');
+    }
     _eyeTrackingService.dispose();
-    _faceDetector.dispose();
     super.dispose();
   }
 
@@ -154,7 +174,6 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> {
     
     // Reset services
     _eyeTrackingService.setAssessmentActive(false);
-    _faceDetector.setAssessmentActive(false);
     _eyeTrackingService.clearData();
   }
 
@@ -509,6 +528,7 @@ Future<void> _startFixationTest() async {
             _fixationTrialNumber = 0;
             _showTarget = true;
             _targetPosition = const Offset(0.5, 0.5);
+            _retryCount = 0;
           });
 
           _startEyeTracking();
@@ -516,8 +536,8 @@ Future<void> _startFixationTest() async {
           await _audioService.speak('Starting one practice trial');
           await _performDriftCorrection();
           _runFixationTrial();
-        } catch (e) {
-          AppLogger.logger.severe('Camera error: $e');
+        } catch (e, stackTrace) {
+          AppLogger.logger.severe('Camera error', e, stackTrace);
         }
       },
     );
@@ -525,7 +545,6 @@ Future<void> _startFixationTest() async {
 
   void _stopEyeTracking() {
     _eyeTrackingService.setAssessmentActive(false);
-    _faceDetector.setAssessmentActive(false);
     _eyeTrackingTimer?.cancel();
     try {
       final controller = _cameraService.controller;
@@ -540,7 +559,6 @@ Future<void> _startFixationTest() async {
 
   void _startEyeTracking() {
     _eyeTrackingService.setAssessmentActive(true);
-    _faceDetector.setAssessmentActive(true);
 
     try {
       final controller = _cameraService.controller;
@@ -551,15 +569,11 @@ Future<void> _startFixationTest() async {
           _isProcessingFrame = true;
 
           try {
-            final faceResult = await _faceDetector.detectFace(image, rotation);
-            final faceDetected = faceResult.faceDetected;
+            final frame = await _eyeTrackingService.trackGaze(image, _targetPosition!, _screenSize, rotation);
+            final faceDetected = frame != null;
 
             if (mounted) {
               setState(() => _isFaceDetected = faceDetected);
-            }
-
-            if (faceDetected && _targetPosition != null && mounted) {
-              await _eyeTrackingService.trackGaze(image, _targetPosition!, _screenSize, rotation);
             }
           } catch (e) {
             AppLogger.logger.warning('Error in frame processing: $e');
@@ -569,8 +583,8 @@ Future<void> _startFixationTest() async {
           }
         });
       }
-    } catch (e) {
-      AppLogger.logger.warning('Error starting camera stream: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Error starting camera stream', e, stackTrace);
       // Reset state if camera fails
       if (mounted) {
         _resetTestState();
@@ -645,34 +659,43 @@ Future<void> _startFixationTest() async {
         try {
           trialResult = _eyeTrackingService.completeTrial();
           qualityOk = _checkTrialQuality(trialResult.frames);
-        } catch (e) {
-          AppLogger.logger.severe('Error completing trial: $e');
+        } catch (e, stackTrace) {
+          AppLogger.logger.severe('Error completing trial', e, stackTrace);
           // Treat as failed trial and retry
           qualityOk = false;
         }
 
         if ((!qualityOk || trialResult == null) && !_isPractice) {
-          try {
-            _audioService.speak('Trial quality low. Repeating trial.');
-          } catch (e) {
-            AppLogger.logger.warning('Error speaking retry message: $e');
-          }
-          _fixationTrialNumber--;
-          _eyeTrackingService.clearData();
-          Future.delayed(const Duration(seconds: 2), () async {
-            if (!mounted) return;
+          if (_retryCount < 2) {
+            _retryCount++;
             try {
-              await _performDriftCorrection();
+              _audioService.speak('Trial quality low. Repeating trial.');
             } catch (e) {
-              AppLogger.logger.warning('Error in drift correction: $e');
+              AppLogger.logger.warning('Error speaking retry message: $e');
             }
-            if (!mounted) return;
-            _runFixationTrial();
-          });
-          return;
+            _fixationTrialNumber--;
+            _eyeTrackingService.clearData();
+            Future.delayed(const Duration(seconds: 2), () async {
+              if (!mounted) return;
+              try {
+                await _performDriftCorrection();
+              } catch (e) {
+                AppLogger.logger.warning('Error in drift correction: $e');
+              }
+              if (!mounted) return;
+              _runFixationTrial();
+            });
+            return;
+          } else {
+            AppLogger.logger.warning('Max retries reached for fixation trial. Proceeding.');
+            _retryCount = 0;
+            // Fall through to success logic
+          }
+        } else {
+          _retryCount = 0;
         }
 
-        if (qualityOk && !_isPractice && trialResult != null) {
+        if (qualityOk && !_isPractice && trialResult != null && _retryCount == 0) {
           final updatedTrial = EyeTrackingTrialData(
             trialNumber: _trials.length + 1,
             taskType: 'fixation',
@@ -733,8 +756,8 @@ Future<void> _startFixationTest() async {
     try {
       dataExportService.exportEyeTrackingSession(sessionData);
       AppLogger.logger.info('Fixation test data exported successfully');
-    } catch (e) {
-      AppLogger.logger.warning('Failed to export fixation test data: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Failed to export fixation test data', e, stackTrace);
     }
 
     Provider.of<TestProgress>(context, listen: false).markFixationCompleted();
@@ -763,6 +786,7 @@ Future<void> _startFixationTest() async {
             _isPractice = true;
             _trialIndex = 0;
             _completedTrials = 0;
+            _retryCount = 0;
           });
 
           _startEyeTracking();
@@ -770,8 +794,8 @@ Future<void> _startFixationTest() async {
           await _audioService.speak('Practice trials. Look at the target as it moves.');
           await _performDriftCorrection();
           _runProsaccadeTrial();
-        } catch (e) {
-          AppLogger.logger.severe('Camera error: $e');
+        } catch (e, stackTrace) {
+          AppLogger.logger.severe('Camera error', e, stackTrace);
         }
       },
     );
@@ -838,8 +862,8 @@ Future<void> _startFixationTest() async {
       try {
         dataExportService.exportEyeTrackingSession(sessionData);
         AppLogger.logger.info('Eye tracking session data exported successfully');
-      } catch (e) {
-        AppLogger.logger.warning('Failed to export eye tracking session data: $e');
+      } catch (e, stackTrace) {
+        AppLogger.logger.severe('Failed to export eye tracking session data', e, stackTrace);
       }
       _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
       return;
@@ -899,8 +923,8 @@ Future<void> _startFixationTest() async {
             try {
               dataExportService.exportEyeTrackingSession(sessionData);
               AppLogger.logger.info('Prosaccade test data exported successfully');
-            } catch (e) {
-              AppLogger.logger.warning('Failed to export prosaccade test data: $e');
+            } catch (e, stackTrace) {
+              AppLogger.logger.severe('Failed to export prosaccade test data', e, stackTrace);
             }
 
             Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
@@ -925,9 +949,16 @@ Future<void> _startFixationTest() async {
           if (_completedTrials >= maxTrials) return;
           final trialEnd = DateTime.now();
           final actualDurationMs = trialEnd.difference(trialStart).inMilliseconds;
-          final trialResult = _eyeTrackingService.completeTrial();
-
-          final qualityOk = actualDurationMs >= 800 && _checkTrialQuality(trialResult.frames);
+          
+          EyeTrackingTrialData? trialResult;
+          bool qualityOk = false;
+          try {
+            trialResult = _eyeTrackingService.completeTrial();
+            qualityOk = trialResult != null && actualDurationMs >= 800 && _checkTrialQuality(trialResult.frames);
+          } catch (e) {
+            AppLogger.logger.warning('Error completing prosaccade trial: $e');
+            qualityOk = false;
+          }
 
           if (!mounted) return;
           if (trialToken != _trialIndex) return;
@@ -944,69 +975,81 @@ Future<void> _startFixationTest() async {
             });
           } else {
             if (!qualityOk) {
-              _audioService.speak('Trial too short or quality low. Repeating trial.');
-              Future.delayed(const Duration(milliseconds: 500), () async {
-                if (!mounted) return;
-                if (trialToken != _trialIndex) return;
-                await _performDriftCorrection();
-                _runProsaccadeTrial();
-              });
+              if (_retryCount < 2) {
+                _retryCount++;
+                _audioService.speak('Trial too short or quality low. Repeating trial.');
+                Future.delayed(const Duration(milliseconds: 500), () async {
+                  if (!mounted) return;
+                  if (trialToken != _trialIndex) return;
+                  await _performDriftCorrection();
+                  _runProsaccadeTrial();
+                });
+                return;
+              } else {
+                AppLogger.logger.warning('Skipping prosaccade trial after retries');
+                _retryCount = 0;
+                // Fall through to success logic to advance trial counters
+              }
             } else {
+              _retryCount = 0;
               final updatedTrial = EyeTrackingTrialData(
                 trialNumber: _trials.length + 1,
                 taskType: 'prosaccade',
-                frames: trialResult.frames,
-                qualityScore: trialResult.qualityScore,
+                frames: trialResult!.frames,
+                qualityScore: trialResult!.qualityScore,
               );
               _trials.add(updatedTrial);
-              AppLogger.logger.info('Added prosaccade trial ${_trials.length} with ${trialResult.frames.length} frames, duration: $actualDurationMs ms');
-              _completedTrials++;
-              _trialIndex++;
-              _prosaccadeIndex++;
-              if (_completedTrials >= maxTrials || _prosaccadeIndex >= _prosaccadeSequence.length) {
-                AppLogger.logger.info('Prosaccade test block complete (hard stop after increment).');
-                _stopEyeTracking();
-                _eyeTrackingService.clearData();
-
-                // Export prosaccade data
-                final sessionData = EyeTrackingSessionData(
-                  participantId: _participantId!,
-                  sessionId: 'eye_tracking_prosaccade_${DateTime.now().millisecondsSinceEpoch}',
-                  timestamp: DateTime.now(),
-                  trials: _trials,
-                  features: EyeTrackingFeatureExtraction.extractSessionFeatures(
-                    EyeTrackingSessionData(
-                      participantId: _participantId!,
-                      sessionId: 'temp',
-                      timestamp: DateTime.now(),
-                      trials: _trials,
-                      features: EyeTrackingFeatureExtraction.getEmptyFeatures(),
-                    ),
-                  ),
-                );
-
-                final dataExportService = getIt<DataExportService>();
-                try {
-                  dataExportService.exportEyeTrackingSession(sessionData);
-                  AppLogger.logger.info('Prosaccade test data exported successfully');
-                } catch (e) {
-                  AppLogger.logger.warning('Failed to export prosaccade test data: $e');
-                }
-
-                Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
-                _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
-                return;
-              }
-              Future.delayed(const Duration(milliseconds: 500), () async {
-                if (!mounted) return;
-                if (trialToken + 1 != _trialIndex) return;
-                if (_completedTrials >= maxTrials || _prosaccadeIndex >= _prosaccadeSequence.length) return;
-                if (_completedTrials % 5 == 0) {
-                  await _performDriftCorrection();
-                }
-                _runProsaccadeTrial();
-              });
+              AppLogger.logger.info('Added prosaccade trial ${_trials.length} with ${trialResult!.frames.length} frames, duration: $actualDurationMs ms');
             }
+
+            _completedTrials++;
+            _trialIndex++;
+            _prosaccadeIndex++;
+            
+            if (_completedTrials >= maxTrials || _prosaccadeIndex >= _prosaccadeSequence.length) {
+              AppLogger.logger.info('Prosaccade test block complete (hard stop after increment).');
+              _stopEyeTracking();
+              _eyeTrackingService.clearData();
+
+              // Export prosaccade data
+              final sessionData = EyeTrackingSessionData(
+                participantId: _participantId!,
+                sessionId: 'eye_tracking_prosaccade_${DateTime.now().millisecondsSinceEpoch}',
+                timestamp: DateTime.now(),
+                trials: _trials,
+                features: EyeTrackingFeatureExtraction.extractSessionFeatures(
+                  EyeTrackingSessionData(
+                    participantId: _participantId!,
+                    sessionId: 'temp',
+                    timestamp: DateTime.now(),
+                    trials: _trials,
+                    features: EyeTrackingFeatureExtraction.getEmptyFeatures(),
+                  ),
+                ),
+              );
+
+              final dataExportService = getIt<DataExportService>();
+              try {
+                dataExportService.exportEyeTrackingSession(sessionData);
+                AppLogger.logger.info('Prosaccade test data exported successfully');
+              } catch (e, stackTrace) {
+                AppLogger.logger.severe('Failed to export prosaccade test data', e, stackTrace);
+              }
+
+              Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
+              _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
+              return;
+            }
+            
+            Future.delayed(const Duration(milliseconds: 500), () async {
+              if (!mounted) return;
+              if (trialToken + 1 != _trialIndex) return;
+              if (_completedTrials >= maxTrials || _prosaccadeIndex >= _prosaccadeSequence.length) return;
+              if (_completedTrials % 5 == 0) {
+                await _performDriftCorrection();
+              }
+              _runProsaccadeTrial();
+            });
           }
         });
       });
@@ -1033,6 +1076,7 @@ Future<void> _startFixationTest() async {
             _currentTask = EyeTrackingTask.pursuit;
             _isPractice = true;
             _pursuitTrialNumber = 0;
+            _retryCount = 0;
           });
 
           _startEyeTracking();
@@ -1040,8 +1084,8 @@ Future<void> _startFixationTest() async {
           await _audioService.speak('Practice trials. Follow the red circle.');
           await _performDriftCorrection();
           _runPursuitTrial();
-        } catch (e) {
-          AppLogger.logger.severe('Camera error: $e');
+        } catch (e, stackTrace) {
+          AppLogger.logger.severe('Camera error', e, stackTrace);
         }
       },
     );
@@ -1091,8 +1135,8 @@ Future<void> _startFixationTest() async {
         try {
           dataExportService.exportEyeTrackingSession(sessionData);
           AppLogger.logger.info('Complete eye tracking session data exported successfully');
-        } catch (e) {
-          AppLogger.logger.warning('Failed to export complete eye tracking session data: $e');
+        } catch (e, stackTrace) {
+          AppLogger.logger.severe('Failed to export complete eye tracking session data', e, stackTrace);
         }
 
         _showTestCompletionDialog('All Eye Tracking Tests Complete!', 'all');
@@ -1131,28 +1175,44 @@ Future<void> _startFixationTest() async {
         if (elapsed > 10) {
           timer.cancel();
           
-          final trialResult = _eyeTrackingService.completeTrial();
-          final qualityOk = _checkTrialQuality(trialResult.frames);
+          EyeTrackingTrialData? trialResult;
+          bool qualityOk = false;
+          try {
+            trialResult = _eyeTrackingService.completeTrial();
+            qualityOk = trialResult != null && _checkTrialQuality(trialResult.frames);
+          } catch (e) {
+            AppLogger.logger.warning('Error completing pursuit trial: $e');
+            qualityOk = false;
+          }
           
           if (!qualityOk && !_isPractice) {
-            _audioService.speak('Trial quality low. Repeating trial.');
-            _pursuitTrialNumber--;
-            Future.delayed(const Duration(seconds: 2), () async {
-              if (!mounted) return;
-              await _performDriftCorrection();
-              if (!mounted) return;
-              _runPursuitTrial();
-            });
-          } else {
-            if (qualityOk && !_isPractice) {
+            if (_retryCount < 2) {
+              _retryCount++;
+              _audioService.speak('Trial quality low. Repeating trial.');
+              _pursuitTrialNumber--;
+              Future.delayed(const Duration(seconds: 2), () async {
+                if (!mounted) return;
+                await _performDriftCorrection();
+                if (!mounted) return;
+                _runPursuitTrial();
+              });
+              return;
+            } else {
+               AppLogger.logger.warning('Skipping pursuit trial after retries');
+               _retryCount = 0;
+            }
+          }
+
+          if (qualityOk && !_isPractice && _retryCount == 0) {
               final updatedTrial = EyeTrackingTrialData(
                 trialNumber: _trials.length + 1,
                 taskType: 'pursuit',
-                frames: trialResult.frames,
-                qualityScore: trialResult.qualityScore,
+                frames: trialResult!.frames,
+                qualityScore: trialResult!.qualityScore,
               );
               _trials.add(updatedTrial);
-              AppLogger.logger.info('Added pursuit trial ${_trials.length} with ${trialResult.frames.length} frames');
+              AppLogger.logger.info('Added pursuit trial ${_trials.length} with ${trialResult!.frames.length} frames');
+              _retryCount = 0;
             }
 
             if (_pursuitTrialNumber < maxTrials) {
@@ -1166,7 +1226,6 @@ Future<void> _startFixationTest() async {
               if (!mounted) return;
               _runPursuitTrial();
             }
-          }
           return;
         }
 

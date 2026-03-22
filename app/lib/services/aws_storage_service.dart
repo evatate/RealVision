@@ -35,8 +35,8 @@ class AWSStorageService {
       AppLogger.logger
           .info('Text file upload complete: ${result.uploadedItem.path}');
       return true;
-    } catch (e) {
-      AppLogger.logger.severe('Text file upload error: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Text file upload error', e, stackTrace);
       return false;
     }
   }
@@ -81,7 +81,7 @@ class AWSStorageService {
 
       // Return the S3 key for later reference
       return s3Key;
-    } catch (e) {
+    } catch (e, stackTrace) {
       // Check if this is an identity pool related error
       if (e.toString().contains('InvalidAccountTypeException') ||
           e.toString().contains('No identity pool registered') ||
@@ -89,7 +89,7 @@ class AWSStorageService {
         AppLogger.logger
             .warning('AWS S3 upload failed - identity pool not configured: $e');
       } else {
-        AppLogger.logger.severe('Upload error: $e');
+        AppLogger.logger.severe('Upload error', e, stackTrace);
       }
       return null;
     }
@@ -110,7 +110,6 @@ class AWSStorageService {
 
       // Generate unique S3 key with timestamp
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      // keep original extension
       final extension = localPath.split('.').last;
       final fileName = '${fileType}_$timestamp.$extension';
       final identityId = await _authService.getIdentityId();
@@ -137,7 +136,7 @@ class AWSStorageService {
 
       // Return the S3 key for later reference
       return s3Key;
-    } catch (e) {
+    } catch (e, stackTrace) {
       // Check if this is an identity pool related error
       if (e.toString().contains('InvalidAccountTypeException') ||
           e.toString().contains('No identity pool registered') ||
@@ -145,7 +144,7 @@ class AWSStorageService {
         AppLogger.logger
             .warning('AWS S3 upload failed - identity pool not configured: $e');
       } else {
-        AppLogger.logger.severe('Upload error: $e');
+        AppLogger.logger.severe('Upload error', e, stackTrace);
       }
       return null;
     }
@@ -192,8 +191,8 @@ class AWSStorageService {
             'Transcription error: ${response.statusCode} - ${response.body}');
         return null;
       }
-    } catch (e) {
-      AppLogger.logger.severe('Transcription error: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Transcription error', e, stackTrace);
       return null;
     }
   }
@@ -228,8 +227,8 @@ class AWSStorageService {
       }
 
       return null;
-    } catch (e) {
-      AppLogger.logger.severe('Error getting results: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Error getting results', e, stackTrace);
       return null;
     }
   }
@@ -303,7 +302,7 @@ class AWSStorageService {
 
       AppLogger.logger.info('Download complete: ${result.localFile.path}');
       return result.localFile.path;
-    } catch (e) {
+    } catch (e, stackTrace) {
       // Check if this is an identity pool related error
       if (e.toString().contains('InvalidAccountTypeException') ||
           e.toString().contains('No identity pool registered') ||
@@ -311,7 +310,7 @@ class AWSStorageService {
         AppLogger.logger.warning(
             'AWS S3 download failed - identity pool not configured: $e');
       } else {
-        AppLogger.logger.severe('Download error: $e');
+        AppLogger.logger.severe('Download error', e, stackTrace);
       }
       return null;
     }
@@ -357,14 +356,14 @@ class AWSStorageService {
 
       // Return the S3 key for later reference
       return s3Key;
-    } catch (e) {
+    } catch (e, stackTrace) {
       if (e.toString().contains('InvalidAccountTypeException') ||
           e.toString().contains('No identity pool registered') ||
           e.toString().contains('identity pool')) {
         AppLogger.logger
             .warning('AWS S3 upload failed - identity pool not configured: $e');
       } else {
-        AppLogger.logger.severe('Transcript upload error: $e');
+        AppLogger.logger.severe('Transcript upload error', e, stackTrace);
       }
       return null;
     }
@@ -381,7 +380,7 @@ class AWSStorageService {
       ).result;
 
       return result.items.map((item) => item.path).toList();
-    } catch (e) {
+    } catch (e, stackTrace) {
       // Check if this is an identity pool related error
       if (e.toString().contains('InvalidAccountTypeException') ||
           e.toString().contains('No identity pool registered') ||
@@ -389,7 +388,7 @@ class AWSStorageService {
         AppLogger.logger
             .warning('AWS S3 list failed - identity pool not configured: $e');
       } else {
-        AppLogger.logger.severe('List error: $e');
+        AppLogger.logger.severe('List error', e, stackTrace);
       }
       return [];
     }

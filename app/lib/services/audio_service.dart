@@ -146,6 +146,7 @@ class AudioService {
       await _flutterTts.setVolume(AppConstants.speechVolume);
       await _flutterTts.setPitch(AppConstants.speechPitch);
       if (Platform.isIOS) {
+        await _flutterTts.setSharedInstance(true);
         await _flutterTts.setIosAudioCategory(
           IosTextToSpeechAudioCategory.playAndRecord,
           [

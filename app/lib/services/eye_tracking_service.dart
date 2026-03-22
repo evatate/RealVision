@@ -113,9 +113,6 @@ class EyeTrackingService {
   // Frame processing
   bool _isAssessmentActive = false;
 
-  // Enhanced stability
-  EyeTrackingFrame? _lastFrame;
-  
   // Track frame processing stats
   int _processedFrames = 0;
   int _skippedFrames = 0;
@@ -124,7 +121,7 @@ class EyeTrackingService {
   EyeTrackingService() {
     _faceDetector = FaceDetector(
       options: FaceDetectorOptions(
-        enableClassification: true,
+        enableClassification: false,
         enableLandmarks: true,
         enableTracking: true,
         minFaceSize: 0.05,
@@ -202,7 +199,7 @@ class EyeTrackingService {
       final inputImage = _convertCameraImage(item.image, item.rotation);
       if (inputImage == null) {
         _skippedFrames++;
-        item.completer.complete(_lastFrame);
+        item.completer.complete(null);
         _processNextFrame();
         return;
       }
@@ -211,7 +208,7 @@ class EyeTrackingService {
 
       if (faces.isEmpty) {
         _skippedFrames++;
-        item.completer.complete(_lastFrame);
+        item.completer.complete(null);
         _processNextFrame();
         return;
       }
@@ -225,7 +222,7 @@ class EyeTrackingService {
 
       if (leftEye == null || rightEye == null || noseBase == null) {
         _skippedFrames++;
-        item.completer.complete(_lastFrame);
+        item.completer.complete(null);
         _processNextFrame();
         return;
       }
@@ -313,14 +310,13 @@ class EyeTrackingService {
       }
 
       // Update stability tracking
-      _lastFrame = frame;
       _processedFrames++;
 
       item.completer.complete(frame);
-    } catch (e) {
-      AppLogger.logger.severe('Gaze tracking error: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Gaze tracking error', e, stackTrace);
       _skippedFrames++;
-      item.completer.complete(_lastFrame);
+      item.completer.complete(null);
     }
     // Continue processing next frame
     _processNextFrame();
@@ -348,7 +344,7 @@ class EyeTrackingService {
     if (_eyeTrackingFrames.isEmpty) return 0.0;
 
     // Quality based on:
-    // 1. Data quantity (prefer 60+ frames for 10s trial at ~6fps effective)
+    // 1. Data quantity (prefer 60+ frames for 10s trial at about 6fps effective)
     // 2. Tracking accuracy (distance to target)
     // 3. Data consistency (no large gaps)
 
@@ -441,7 +437,7 @@ class EyeTrackingService {
           metadata: inputImageData,
         );
       } else {
-        // iOS - handle plane concatenation carefully
+        // iOS: handle plane concatenation carefully
         try {
           int totalSize = 0;
           for (final plane in image.planes) {

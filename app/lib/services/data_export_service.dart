@@ -45,8 +45,8 @@ class DataExportService {
       }
 
       return file;
-    } catch (e) {
-      AppLogger.logger.severe('Error exporting smile session: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Error exporting smile session', e, stackTrace);
       rethrow;
     }
   }
@@ -92,8 +92,8 @@ class DataExportService {
       }
 
       return file;
-    } catch (e) {
-      AppLogger.logger.severe('Error exporting gait session: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Error exporting gait session', e, stackTrace);
       rethrow;
     }
   }
@@ -139,8 +139,8 @@ class DataExportService {
       }
 
       return file;
-    } catch (e) {
-      AppLogger.logger.severe('Error exporting eye tracking session: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Error exporting eye tracking session', e, stackTrace);
       rethrow;
     }
   }
@@ -171,8 +171,8 @@ class DataExportService {
         // Old structure with direct session data
         return SmileSessionData.fromJson(jsonData);
       }
-    } catch (e) {
-      AppLogger.logger.severe('Error loading smile session: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Error loading smile session', e, stackTrace);
       return null;
     }
   }
@@ -194,8 +194,8 @@ class DataExportService {
         // Old structure with direct session data
         return GaitSessionData.fromJson(jsonData);
       }
-    } catch (e) {
-      AppLogger.logger.severe('Error loading gait session: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Error loading gait session', e, stackTrace);
       return null;
     }
   }
@@ -217,8 +217,8 @@ class DataExportService {
         // Old structure with direct session data
         return EyeTrackingSessionData.fromJson(jsonData);
       }
-    } catch (e) {
-      AppLogger.logger.severe('Error loading eye tracking session: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Error loading eye tracking session', e, stackTrace);
       return null;
     }
   }

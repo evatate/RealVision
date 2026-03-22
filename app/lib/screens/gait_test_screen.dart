@@ -112,8 +112,8 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
     try {
       await dataExportService.exportGaitSession(sessionData);
       AppLogger.logger.info('Gait session data exported successfully');
-    } catch (e) {
-      AppLogger.logger.warning('Failed to export gait session data: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Failed to export gait session data', e, stackTrace);
     }
 
     AppLogger.logger.info('==== WALKING TEST RESULTS ====');

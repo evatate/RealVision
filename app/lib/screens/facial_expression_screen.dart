@@ -156,8 +156,8 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
 
       await _audioService.speak('Practice round. Keep neutral face');
       _startCountdown();
-    } catch (e) {
-      AppLogger.logger.severe('Camera error: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Camera error', e, stackTrace);
     }
   }
 
@@ -166,7 +166,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
       await _cameraService.startImageStream((CameraImage image, InputImageRotation rotation) async {
         if (_faceDetectionTimer?.isActive ?? false) return;
 
-        _faceDetectionTimer = Timer(Duration(milliseconds: 33), () async { // ~30 fps
+        _faceDetectionTimer = Timer(Duration(milliseconds: 33), () async { // about 30 fps
           final result = await _faceDetector.detectFace(
             image,
             rotation,
@@ -194,8 +194,8 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
           }
         });
       });
-    } catch (e) {
-      AppLogger.logger.severe('Error starting face detection: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Error starting face detection', e, stackTrace);
     }
   }
 
@@ -401,8 +401,8 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
     // Export to JSON
     _dataExport.exportSmileSession(sessionData).then((filePath) {
       AppLogger.logger.info('Smile session data exported to: $filePath');
-    }).catchError((error) {
-      AppLogger.logger.severe('Failed to export smile session data: $error');
+    }).catchError((error, stackTrace) {
+      AppLogger.logger.severe('Failed to export smile session data', error, stackTrace);
     });
 
     // Mark test as completed before navigation

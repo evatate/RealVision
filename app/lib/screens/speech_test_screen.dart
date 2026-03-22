@@ -119,8 +119,8 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     try {
       wavPath = await _audioService.startRecording();
       AppLogger.logger.info('WAV recording started. File path: $wavPath');
-    } catch (e) {
-      AppLogger.logger.severe('Error starting WAV recording: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Error starting WAV recording', e, stackTrace);
       if (mounted) {
         setState(() => _isListening = false);
         _elapsedTimeTimer?.cancel();
@@ -164,8 +164,8 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
     try {
       wavPath = await _audioService.stopRecording();
       AppLogger.logger.info('WAV recording stopped. File path: $wavPath');
-    } catch (e) {
-      AppLogger.logger.severe('Error stopping WAV recording: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Error stopping WAV recording', e, stackTrace);
     }
 
     if (mounted) {
@@ -202,8 +202,8 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
         } else {
           AppLogger.logger.severe('S3 upload failed for $wavPath');
         }
-      } catch (e) {
-        AppLogger.logger.severe('WAV upload to S3 failed: $e');
+      } catch (e, stackTrace) {
+        AppLogger.logger.severe('WAV upload to S3 failed', e, stackTrace);
       }
     } else {
       AppLogger.logger.warning('WAV recording not available or file not found');
@@ -304,8 +304,8 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
       } catch (e) {
         AppLogger.logger.warning('Failed to upload speech metadata to S3, but local export succeeded: $e');
       }
-    } catch (e) {
-      AppLogger.logger.severe('Error exporting speech metadata: $e');
+    } catch (e, stackTrace) {
+      AppLogger.logger.severe('Error exporting speech metadata', e, stackTrace);
     }
   }
 
