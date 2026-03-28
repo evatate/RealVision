@@ -66,6 +66,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> with WidgetsBindi
   List<EyeTrackingTrialData> _trials = [];
   Size _screenSize = Size.zero;
   bool _isProcessingFrame = false;
+  String? _qualityMessage;
 
   @override
   void initState() {
@@ -96,6 +97,8 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> with WidgetsBindi
           if (mounted && _currentTask != EyeTrackingTask.none) {
             _startEyeTracking();
           }
+        }).catchError((e) {
+          AppLogger.logger.warning('Error reinitializing camera on resume: $e');
         });
       }
     }
@@ -234,21 +237,28 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> with WidgetsBindi
   }
 
 bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
-        if (trialData.isEmpty) {
-          AppLogger.logger.warning('Trial rejected: no data');
-          return false;
-        }
+    setState(() => _qualityMessage = null);
+
+    if (trialData.isEmpty) {
+      setState(() => _qualityMessage = 'Face not recognized. Ensure good lighting or move slightly away from the phone.');
+      AppLogger.logger.warning('Trial rejected: no data');
+      return false;
+    }
+
     if (_currentTask == EyeTrackingTask.fixation && trialData.length < 30) {
+      setState(() => _qualityMessage = 'Tracking was unstable. Please keep your head still and stay in frame.');
       AppLogger.logger.warning('Fixation trial rejected: only ${trialData.length} frames (need 30+)');
       return false;
     }
 
     if (_currentTask == EyeTrackingTask.prosaccade && trialData.length < 15) {
+      setState(() => _qualityMessage = 'Tracking was unstable. Please keep your head still and stay in frame.');
       AppLogger.logger.warning('Prosaccade trial rejected: only ${trialData.length} frames (need 15+)');
       return false;
     }
 
     if (_currentTask == EyeTrackingTask.pursuit && trialData.length < 20) {
+      setState(() => _qualityMessage = 'Tracking was unstable. Please keep your head still and stay in frame.');
       AppLogger.logger.warning('Pursuit trial rejected: only ${trialData.length} frames (need 20+)');
       return false;
     }
@@ -262,6 +272,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
     final maxGapRate = _currentTask == EyeTrackingTask.pursuit ? 0.6 : 0.4;
     
     if (gapRate > maxGapRate) {
+      setState(() => _qualityMessage = 'Tracking was interrupted. Check your lighting and hold the phone steady.');
       AppLogger.logger.warning('Trial rejected: too many gaps (${(gapRate * 100).toStringAsFixed(1)}%)');
       return false;
     }
@@ -271,20 +282,10 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
     }
 
     final meanDistance = trialData.map((p) => p.distance).reduce((a, b) => a + b) / trialData.length;
-
-    double threshold;
-    switch (_currentTask) {
-      case EyeTrackingTask.fixation:
-        threshold = 0.30;
-        break;
-      case EyeTrackingTask.prosaccade:
-        threshold = 0.50;
-        break;
-      default:
-        threshold = 0.35;
-    }
+    double threshold = _currentTask == EyeTrackingTask.fixation ? 0.30 : 0.50;
 
     if (meanDistance > threshold) {
+      setState(() => _qualityMessage = 'Significant head movement detected. Please move only your eyes.');
       AppLogger.logger.warning('Trial rejected: mean distance ${meanDistance.toStringAsFixed(3)} > $threshold');
       return false;
     }
@@ -294,7 +295,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
 
   void _showTestCompletionDialog(String title, String testType) {
     _audioService.speak(testType == 'all' 
-        ? 'All eye tracking tests are now complete. You can close this screen, unless a researcher asks you to do them again.' 
+        ? "You've finished all the eye tracking tests. Please only do these tests again if the research team instructs you to." 
         : '$testType test complete');
     
     showDialog(
@@ -323,7 +324,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
               ],
             ),
             content: const Text(
-              'You have finished all eye tracking tests. Please only do these tests again if the research team asks you to.',
+              "You've finished all the eye tracking tests. Please only do these tests again if the research team instructs you to.",
               style: TextStyle(fontSize: 22, color: AppColors.textDark),
               textAlign: TextAlign.center,
             ),
@@ -669,7 +670,7 @@ Future<void> _startFixationTest() async {
           if (_retryCount < 2) {
             _retryCount++;
             try {
-              _audioService.speak('Trial quality low. Repeating trial.');
+              _audioService.speak(_qualityMessage ?? 'Trial quality low. Repeating trial.');
             } catch (e) {
               AppLogger.logger.warning('Error speaking retry message: $e');
             }
@@ -964,7 +965,7 @@ Future<void> _startFixationTest() async {
           if (trialToken != _trialIndex) return;
           if (_isPractice) {
             if (!qualityOk) {
-              _audioService.speak('Practice trial quality low. Repeating trial.');
+              _audioService.speak(_qualityMessage ?? 'Practice trial quality low. Repeating trial.');
             }
             _trialIndex++;
             Future.delayed(const Duration(milliseconds: 500), () async {
@@ -977,7 +978,7 @@ Future<void> _startFixationTest() async {
             if (!qualityOk) {
               if (_retryCount < 2) {
                 _retryCount++;
-                _audioService.speak('Trial too short or quality low. Repeating trial.');
+                _audioService.speak(_qualityMessage ?? 'Trial quality low. Repeating trial.');
                 Future.delayed(const Duration(milliseconds: 500), () async {
                   if (!mounted) return;
                   if (trialToken != _trialIndex) return;
@@ -1188,7 +1189,7 @@ Future<void> _startFixationTest() async {
           if (!qualityOk && !_isPractice) {
             if (_retryCount < 2) {
               _retryCount++;
-              _audioService.speak('Trial quality low. Repeating trial.');
+              _audioService.speak(_qualityMessage ?? 'Trial quality low. Repeating trial.');
               _pursuitTrialNumber--;
               Future.delayed(const Duration(seconds: 2), () async {
                 if (!mounted) return;
@@ -1465,6 +1466,32 @@ Future<void> _startFixationTest() async {
             ),
           ),
         
+        if (_qualityMessage != null && !_isDriftCorrecting && _currentTask != EyeTrackingTask.none)
+          Positioned(
+            top: 170,
+            left: 20,
+            right: 20,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: Text(
+                  _qualityMessage!,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+
         if (_isDriftCorrecting)
           Positioned(
             top: 100,

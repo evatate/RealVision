@@ -161,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
           style: TextStyle(fontSize: 28),
         ),
         content: Text(
-          'All tests completed successfully. Would you like to redo any tests or finish?',
+          "You've finished all the behavioral tasks. Please return to the earlier survey using your return code to continue where you left off and answer some brief feedback questions (5-10 minutes). If you cannot continue where you left off, please contact the research team.",
           style: TextStyle(fontSize: 20),
         ),
         actions: [
