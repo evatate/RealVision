@@ -215,10 +215,13 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
 
     AppLogger.logger.info('Speech recording complete. Duration: ${testDuration.inSeconds} seconds');
 
-    _showCompletionDialog();
+    if (mounted) {
+      _showCompletionDialog();
+    }
   }
 
   void _showCompletionDialog() {
+    if (!mounted) return;
     _audioService.speak('The speech test is now complete. You can close this screen, unless a researcher asks you to do it again.');
     showDialog(
       context: context,

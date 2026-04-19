@@ -116,27 +116,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                             
-                            SizedBox(height: 40),
-                            
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: progress.allTestsCompleted
-                                    ? () {
-                                        _showResultsDialog(context, progress);
-                                      }
-                                    : null,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.success,
-                                  disabledBackgroundColor: AppColors.border,
-                                  padding: EdgeInsets.all(16), // Reduced padding
-                                ),
-                                child: Text(
-                                  'View Results',
-                                  style: TextStyle(fontSize: 20, color: Colors.white), // Reduced font size
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                       ),

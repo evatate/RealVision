@@ -1,7 +1,7 @@
 name: realvision
 description: ADRD assessment application with multimodal biomarker detection
 publish_to: 'none'
-version: 9.9.9+9 # on 8 for android
+version: 1.5.5
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

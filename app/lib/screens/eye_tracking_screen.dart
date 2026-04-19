@@ -148,7 +148,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> with WidgetsBindi
   }
 
   void _resetTestState() {
-    // Cancel all timers and stop all processes
+     Cancel all timers and stop all processes
     _taskTimer?.cancel();
     _countdownTimer?.cancel();
     _eyeTrackingTimer?.cancel();

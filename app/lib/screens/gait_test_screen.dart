@@ -93,8 +93,11 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
     // Extract features from the trial
     final features = GaitFeatureExtraction.extractTrialFeatures(trialData);
 
-    // Get participant ID from global state
-    final participantId = Provider.of<TestProgress>(context, listen: false).participantId ?? 'unknown_participant';
+    // Get participant ID from global state, but avoid context use if disposed
+    String participantId = 'unknown_participant';
+    if (mounted) {
+      participantId = Provider.of<TestProgress>(context, listen: false).participantId ?? 'unknown_participant';
+    }
 
     // Create session data
     final sessionData = GaitSessionData(
@@ -105,7 +108,9 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
       features: features,
     );
 
-    Provider.of<TestProgress>(context, listen: false).markGaitCompleted();
+    if (mounted) {
+      Provider.of<TestProgress>(context, listen: false).markGaitCompleted();
+    }
 
     // Export the data
     final dataExportService = getIt<DataExportService>();
@@ -127,10 +132,13 @@ class _GaitTestScreenState extends State<GaitTestScreen> {
     AppLogger.logger.info('Gait Quality Score: ${features.gaitQualityScore.toStringAsFixed(3)}');
     AppLogger.logger.info('==============================');
 
-    _showCompletionDialog();
+    if (mounted) {
+      _showCompletionDialog();
+    }
   }
 
   void _showCompletionDialog() {
+    if (!mounted) return;
     _audioService.speak('The walking test is now complete. You can close this screen, unless a researcher asks you to do it again.');
     showDialog(
       context: context,
