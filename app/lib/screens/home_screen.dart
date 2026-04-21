@@ -4,12 +4,13 @@ import '../models/test_progress.dart';
 import '../utils/colors.dart';
 import '../utils/constants.dart';
 import '../widgets/test_button.dart';
+import '../services/service_locator.dart';
 import '../services/audio_service.dart';
+import '../services/connectivity_service.dart';
+import 'gait_test_screen.dart';
 import 'speech_test_screen.dart';
 import 'eye_tracking_screen.dart';
 import 'facial_expression_screen.dart';
-import 'gait_test_screen.dart';
-import '../services/service_locator.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,6 +22,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _navigateToTest(Widget screen, String testName) async {
+    // Check internet connectivity before starting test
+    final hasConnection = await ConnectivityService.checkConnectivityAndShowDialog(context);
+    if (!hasConnection) {
+      return; // Dialog shown, don't proceed
+    }
+
     final audioService = getIt<AudioService>();
     
     if (!audioService.isInitialized) {

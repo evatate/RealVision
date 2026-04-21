@@ -315,6 +315,7 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
   }
 
   void _showCompletionDialog() {
+    if (!mounted) return;
     _audioService.speak('The smile test is now complete. You can close this screen, unless a researcher asks you to do it again.');
     showDialog(
       context: context,
@@ -406,9 +407,13 @@ class _FacialExpressionScreenState extends State<FacialExpressionScreen> {
     });
 
     // Mark test as completed before navigation
-    Provider.of<TestProgress>(context, listen: false).markSmileCompleted();
+    if (mounted) {
+      Provider.of<TestProgress>(context, listen: false).markSmileCompleted();
+    }
 
-    _showCompletionDialog();
+    if (mounted) {
+      _showCompletionDialog();
+    }
   }
 
   @override

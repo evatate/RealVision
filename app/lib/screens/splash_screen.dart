@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../utils/colors.dart';
+import '../utils/logger.dart';
+import '../models/test_progress.dart';
 import '../services/service_locator.dart';
 import '../services/audio_service.dart';
 import '../services/aws_auth_service.dart';
 import '../services/user_validation_service.dart';
-import '../utils/logger.dart';
-import '../models/test_progress.dart';
-import 'package:provider/provider.dart';
+import '../services/connectivity_service.dart';
 import 'home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -38,6 +39,15 @@ class _SplashScreenState extends State<SplashScreen> {
     const minSplashDuration = Duration(seconds: 2);
     
     try {
+      setState(() => _statusMessage = 'Checking internet connection...');
+      
+      // Check internet connectivity
+      final hasConnection = await ConnectivityService.hasInternetConnection();
+      if (!hasConnection) {
+        AppLogger.logger.warning('No internet connection detected');
+        // Continue anyway - some features might work offline
+      }
+      
       setState(() => _statusMessage = 'Checking authentication...');
       
       // Ensure user is signed in

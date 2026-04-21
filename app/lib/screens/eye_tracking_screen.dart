@@ -148,7 +148,7 @@ class _EyeTrackingScreenState extends State<EyeTrackingScreen> with WidgetsBindi
   }
 
   void _resetTestState() {
-     Cancel all timers and stop all processes
+    // Cancel all timers and stop all processes
     _taskTimer?.cancel();
     _countdownTimer?.cancel();
     _eyeTrackingTimer?.cancel();
@@ -294,6 +294,7 @@ bool _checkTrialQuality(List<EyeTrackingFrame> trialData) {
   }
 
   void _showTestCompletionDialog(String title, String testType) {
+    if (!mounted) return;
     _audioService.speak(testType == 'all' 
         ? "You've finished all the eye tracking tests. Please only do these tests again if the research team instructs you to." 
         : '$testType test complete');
@@ -761,11 +762,15 @@ Future<void> _startFixationTest() async {
       AppLogger.logger.severe('Failed to export fixation test data', e, stackTrace);
     }
 
-    Provider.of<TestProgress>(context, listen: false).markFixationCompleted();
+    if (mounted) {
+      Provider.of<TestProgress>(context, listen: false).markFixationCompleted();
+    }
 
     AppLogger.logger.info('Fixation test complete. Total trials collected: ${_trials.length}');
 
-    _showTestCompletionDialog('Fixation Stability Test Complete!', 'fixation');
+    if (mounted) {
+      _showTestCompletionDialog('Fixation Stability Test Complete!', 'fixation');
+    }
   }
 
   Future<void> _startProsaccadeTest() async {
@@ -857,7 +862,9 @@ Future<void> _startFixationTest() async {
         ),
       );
 
-      Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
+      if (mounted) {
+        Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
+      }
 
       final dataExportService = getIt<DataExportService>();
       try {
@@ -866,7 +873,9 @@ Future<void> _startFixationTest() async {
       } catch (e, stackTrace) {
         AppLogger.logger.severe('Failed to export eye tracking session data', e, stackTrace);
       }
-      _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
+      if (mounted) {
+        _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
+      }
       return;
     }
 
@@ -928,8 +937,12 @@ Future<void> _startFixationTest() async {
               AppLogger.logger.severe('Failed to export prosaccade test data', e, stackTrace);
             }
 
-            Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
-            _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
+            if (mounted) {
+              Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
+            }
+            if (mounted) {
+              _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
+            }
             return;
           }
           pos = _getProsaccadePosition(_prosaccadeSequence[_prosaccadeIndex]);
@@ -1037,8 +1050,12 @@ Future<void> _startFixationTest() async {
                 AppLogger.logger.severe('Failed to export prosaccade test data', e, stackTrace);
               }
 
-              Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
-              _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
+              if (mounted) {
+                Provider.of<TestProgress>(context, listen: false).markProsaccadeCompleted();
+              }
+              if (mounted) {
+                _showTestCompletionDialog('Pro-saccade Test Complete!', 'prosaccade');
+              }
               return;
             }
             
@@ -1130,7 +1147,9 @@ Future<void> _startFixationTest() async {
           ),
         );
 
-        Provider.of<TestProgress>(context, listen: false).markPursuitCompleted();
+        if (mounted) {
+          Provider.of<TestProgress>(context, listen: false).markPursuitCompleted();
+        }
 
         final dataExportService = getIt<DataExportService>();
         try {
@@ -1140,7 +1159,9 @@ Future<void> _startFixationTest() async {
           AppLogger.logger.severe('Failed to export complete eye tracking session data', e, stackTrace);
         }
 
-        _showTestCompletionDialog('All Eye Tracking Tests Complete!', 'all');
+        if (mounted) {
+          _showTestCompletionDialog('All Eye Tracking Tests Complete!', 'all');
+        }
       }
       return;
     }
